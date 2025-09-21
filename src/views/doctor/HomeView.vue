@@ -1,73 +1,22 @@
 <template>
   <div class="doctor-home">
     <!-- 顶部导航栏 -->
-    <header class="header">
-      <div class="logo">
-        <div class="medical-symbol">
-          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 4V2M12 22V20M4 12H2M6.31 6.31L4.9 4.9M17.69 6.31L19.1 4.9M6.31 17.69L4.9 19.1M17.69 17.69L19.1 19.1M22 12H20M16 12H8M12 16V8"
-                  stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <span>YiLiao 医生端</span>
-      </div>
-
-      <div class="header-right">
-        <div class="notifications">
-          <span>🔔</span>
-          <span class="badge">3</span>
-        </div>
-        <div class="user-info" @click="toggleDropdown">
-          <span class="name">{{ username }} 主治医师</span>
-          <span class="arrow">▼</span>
-        </div>
-        <div v-if="dropdownVisible" class="dropdown-menu">
-          <a href="#">个人资料</a>
-          <a href="#">设置</a>
-          <a href="#" @click.prevent="logout">退出登录</a>
-        </div>
-      </div>
-    </header>
+    <TopNavbar 
+      :notification-count="3"
+      @notification-click="handleNotificationClick"
+      @profile-click="handleProfileClick"
+      @settings-click="handleSettingsClick"
+    />
 
     <!-- 主体布局 -->
     <div class="main-layout">
-      <!-- 左侧菜单 -->
-      <aside class="sidebar">
-        <nav class="menu">
-          <div class="menu-title">核心功能</div>
-          <a href="#" class="menu-item active">
-            <span class="icon">📅</span>
-            <span>今日预约</span>
-          </a>
-          <a href="#" class="menu-item">
-            <span class="icon">👥</span>
-            <span>患者管理</span>
-          </a>
-          <a href="#" class="menu-item">
-            <span class="icon">📝</span>
-            <span>病历记录</span>
-          </a>
-          <a href="#" class="menu-item">
-            <span class="icon">📊</span>
-            <span>工作统计</span>
-          </a>
-
-          <div class="menu-title">系统设置</div>
-          <a href="#" class="menu-item">
-            <span class="icon">⚙️</span>
-            <span>账户设置</span>
-          </a>
-          <a href="#" class="menu-item">
-            <span class="icon">❓</span>
-            <span>帮助中心</span>
-          </a>
-        </nav>
-      </aside>
+      <!-- 左侧菜单 - 使用SideLeft组件 -->
+      <SideLeft :activeMenu="'workbench'" />
 
       <!-- 主内容区 -->
       <main class="content">
         <div class="page-header">
-          <h1>今日工作概览</h1>
+          <h1>工作台概览</h1>
           <p>2025年9月20日，星期六</p>
         </div>
 
@@ -76,7 +25,7 @@
           <div class="card">
             <div class="card-icon bg-blue">📅</div>
             <div class="card-info">
-              <h3>今日预约</h3>
+              <h3>预约管理</h3>
               <p class="number">{{ totalAppointments }}</p>
               <p class="desc">待接诊</p>
             </div>
@@ -117,10 +66,10 @@
           <button class="action-btn outline">导出报表</button>
         </div>
 
-        <!-- 今日预约列表 -->
+        <!-- 预约管理列表 -->
         <div class="recent-appointments">
             <div class="list-header">
-              <h2>今日预约</h2>
+              <h2>预约管理</h2>
               <button class="view-all-btn" @click="viewAll">
                 <span>查看全部</span>
                 <svg class="arrow-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -196,13 +145,15 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 import { ElNotification, ElMessage } from 'element-plus'
+import SideLeft from '@/components/doctor/SideLeft.vue'
+import TopNavbar from '@/components/doctor/TopNavbar.vue'
 
 // 状态
-const dropdownVisible = ref(false)
 const currentCallIndex = ref(0)
 const store = useStore()
 
-let username = store.state.user.username;
+let username = store.state.user.username || '张医生';
+
 // 当前时间（模拟）
 const currentTime = ref(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
 
@@ -225,24 +176,35 @@ const completedCount = computed(() => appointmentList.value.filter(p => p.status
 const pendingFollowUp = computed(() => 4) // 示例
 const urgentCount = computed(() => 1) // 示例
 
-// 路由与退出
+// 路由
 const router = useRouter()
-const logout = () => {
-  localStorage.clear()
-  router.push('/login')
+
+// 顶部导航栏事件处理
+const handleNotificationClick = () => {
+  ElMessage.info('查看通知功能')
 }
 
-// 切换下拉菜单
-const toggleDropdown = (event) => {
-  dropdownVisible.value = !dropdownVisible.value
-  event.stopPropagation()
+const handleProfileClick = () => {
+  ElMessage.info('个人资料功能开发中...')
+}
+
+const handleSettingsClick = () => {
+  ElMessage.info('设置功能开发中...')
 }
 
 onMounted(() => {
-  document.addEventListener('click', () => (dropdownVisible.value = false))
+  
+  // 每分钟更新时间
+  const timer = setInterval(() => {
+    currentTime.value = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }, 60000)
+  
+  onUnmounted(() => {
+    clearInterval(timer)
+  })
 })
 onUnmounted(() => {
-  document.removeEventListener('click', () => (dropdownVisible.value = false))
+  // 清理定时器
 })
 
 // 查看全部
@@ -383,160 +345,21 @@ $border: #ebeef5;
   font-family: 'Helvetica Neue', Arial, sans-serif;
 }
 
-// 顶部导航
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 30px;
-  background: $primary;
-  color: white;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(10px);
-  position: relative;
-  z-index: 10;
-
-  .logo {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-size: 20px;
-    font-weight: 600;
-
-    .medical-symbol {
-      width: 40px;
-      height: 40px;
-      background: rgba(255, 255, 255, 0.2);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      svg {
-        width: 20px;
-        height: 20px;
-      }
-    }
-  }
-
-  .header-right {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    position: relative;
-
-    .notifications {
-      position: relative;
-      font-size: 20px;
-      cursor: pointer;
-      .badge {
-        position: absolute;
-        top: -6px;
-        right: -6px;
-        background: $danger;
-        color: white;
-        font-size: 12px;
-        width: 18px;
-        height: 18px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-    }
-
-    .user-info {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      cursor: pointer;
-      .arrow {
-        font-size: 12px;
-      }
-    }
-
-    .dropdown-menu {
-      position: absolute;
-      top: 100%;
-      right: 0;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
-      overflow: hidden;
-      min-width: 180px;
-      margin-top: 8px;
-      z-index: 100;
-
-      a {
-        display: block;
-        padding: 12px 20px;
-        color: $text;
-        text-decoration: none;
-        border-bottom: 1px solid $border;
-        &:last-child { border: none; }
-        &:hover { background: $light; }
-      }
-    }
-  }
-}
+// 顶部导航样式已移至SideLeft组件中
 
 // 主体布局
 .main-layout {
   display: flex;
-  min-height: calc(100vh - 60px);
+  min-height: calc(100vh - 72px); // 为TopNavbar留出空间
+  margin-top: 72px; // 为TopNavbar留出空间
 }
 
-// 侧边栏
-.sidebar {
-  width: 260px;
-  background: white;
-  border-right: 1px solid $border;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  padding: 30px 0;
-
-  .menu {
-    .menu-title {
-      padding: 12px 24px;
-      color: #666;
-      font-size: 14px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-top: 16px;
-    }
-
-    .menu-item {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      padding: 14px 24px;
-      color: #555;
-      text-decoration: none;
-      font-size: 15px;
-      transition: all 0.3s ease;
-      border-left: 3px solid transparent;
-
-      &:hover {
-        background: #f8f9fc;
-        color: $primary;
-      }
-
-      &.active {
-        background: rgba($primary, 0.1);
-        color: $primary;
-        border-left-color: $primary;
-        font-weight: 600;
-      }
-
-      .icon {
-        font-size: 18px;
-      }
-    }
-  }
-}
+// 侧边栏样式已移至SideLeft组件中
 
 // 主内容区
 .content {
   flex: 1;
+  margin-left: 260px; // 为SideLeft组件留出空间
   padding: 30px;
   overflow-y: auto;
 

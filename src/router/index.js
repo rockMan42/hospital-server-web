@@ -1,5 +1,5 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
-import HomeView from '../views/HomeView.vue'
+import HomeView from '../views/doctor/HomeView.vue'
 
 const routes = [
   {
@@ -19,12 +19,132 @@ const routes = [
     component: () => import(/* webpackChunkName: "about" */ '@/views/TTSView.vue')
   },
   {
-    path: '/about',
-    name: 'about',
+    path: '/patientmanager',
+    name: 'patientmanager',
     meta: {
-      title: "关于我们"
+      title: "患者管理"
     },
-    component: () => import(/* webpackChunkName: "about" */ '@/views/AboutView.vue')
+    component: () => import(/* webpackChunkName: "about" */ '@/views/doctor/PatientManagerView.vue')
+  },
+  {
+    path: '/binglimanager',
+    name: 'binglimanager',
+    meta: {
+      title: "病例管理"
+    },
+    component: () => import(/* webpackChunkName: "about" */ '@/views/doctor/BingLiManagerView.vue')
+  },
+  {
+    path: '/yuyuemanager',
+    name: 'yuyuemanager',
+    meta: {
+      title: "预约管理"
+    },
+    component: () => import(/* webpackChunkName: "about" */ '@/views/doctor/YuYueManagerView.vue')
+  },
+  {
+    path: '/workstatistic',
+    name: 'workstatistic',
+    meta: {
+      title: "工作统计"
+    },
+    component: () => import(/* webpackChunkName: "about" */ '@/views/doctor/WorkStatisticsView.vue')
+  },
+  {
+    path: '/manager',
+    name: 'manager',
+    meta: {
+      title: "管理员首页"
+    },
+    component: () => import(/* webpackChunkName: "about" */ '@/views/manager/ManagerMainView.vue')
+  },
+  {
+    path: '/departmentmanager',
+    name: 'departmentmanager',
+    meta: {
+      title: "科室管理"
+    },
+    component: () => import(/* webpackChunkName: "about" */ '@/views/manager/DepartmentManagerView.vue')
+  },
+  {
+    path: '/clinicroommanager',
+    name: 'clinicroommanager',
+    meta: {
+      title: "诊室管理"
+    },
+    component: () => import(/* webpackChunkName: "about" */ '@/views/manager/ClinicRoomManagerView.vue')
+  },
+  {
+    path: '/doctormanager',
+    name: 'doctormanager',
+    meta: {
+      title: "医生管理"
+    },
+    component: () => import(/* webpackChunkName: "about" */ '@/views/manager/DoctorManagerView.vue')
+  },
+  {
+    path: '/nursemanager',
+    name: 'nursemanager',
+    meta: {
+      title: "护士管理"
+    },
+    component: () => import(/* webpackChunkName: "about" */ '@/views/manager/NurseManagerView.vue')
+  },
+  {
+    path: '/mpatientmanager',
+    name: 'ManagerPatientManager',
+    meta: {
+      title: "患者管理"
+    },
+    component: () => import(/* webpackChunkName: "about" */ '@/views/manager/PatientManagerView.vue')
+  },
+  {
+    path: '/myuyuemanager',
+    name: 'ManagerYuYueManager',
+    meta: {
+      title: "预约管理"
+    },
+    component: () => import(/* webpackChunkName: "about" */ '@/views/manager/YuYueManagerView.vue')
+  },
+  {
+    path: '/schedule',
+    name: 'schedule',
+    meta: {
+      title: "门诊日程"
+    },
+    component: () => import(/* webpackChunkName: "about" */ '@/views/manager/ScheduleView.vue')
+  },
+  {
+    path: '/outpatientmanager',
+    name: 'outpatientmanager',
+    meta: {
+      title: "出诊管理"
+    },
+    component: () => import(/* webpackChunkName: "about" */ '@/views/manager/OutpatientManagerView.vue')
+  },
+  {
+    path: '/settings',
+    name: 'settings',
+    meta: {
+      title: "系统设置"
+    },
+    component: () => import(/* webpackChunkName: "about" */ '@/views/manager/SettingsView.vue')
+  },
+  {
+    path: '/nursehome',
+    name: 'nursehome',
+    meta: {
+      title: "护士首页"
+    },
+    component: () => import(/* webpackChunkName: "about" */ '@/views/nurse/NurseHomeView.vue')
+  },
+  {
+    path: '/patientcare',
+    name: 'patientcare',
+    meta: {
+      title: "患者护理"
+    },
+    component: () => import(/* webpackChunkName: "about" */ '@/views/nurse/PatientCareView.vue')
   },
     {
     path: '/login',
