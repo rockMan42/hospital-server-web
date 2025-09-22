@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 //统一请求资源地址  http://localhost:8080/   
-axios.defaults.baseURL = "https://localhost:8081/"
+axios.defaults.baseURL = "http://localhost:8081/"
 //统一请求头配置
 axios.defaults.headers.post['Content-Type'] = 'application/json;charset=utf-8';
 

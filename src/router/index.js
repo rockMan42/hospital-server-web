@@ -131,6 +131,14 @@ const routes = [
     component: () => import(/* webpackChunkName: "about" */ '@/views/manager/SettingsView.vue')
   },
   {
+    path: '/registration',
+    name: 'registration',
+    meta: {
+      title: "窗口挂号"
+    },
+    component: () => import(/* webpackChunkName: "about" */ '@/views/manager/RegistrationWindowView.vue')
+  },
+  {
     path: '/nursehome',
     name: 'nursehome',
     meta: {

@@ -160,7 +160,7 @@
           <div class="list-header">
             <h2>科室列表</h2>
             <div class="list-info">
-              共 {{ filteredDepartments.length }} 个科室
+              共 {{ pagination.total }} 个科室
               <span v-if="selectedDepartments.length > 0" class="selected-info">
                 ，已选择 {{ selectedDepartments.length }} 个
               </span>
@@ -168,7 +168,7 @@
           </div>
 
           <!-- 科室表格 -->
-          <div class="department-table-wrapper">
+          <div class="department-table-wrapper" v-loading="loading">
             <table class="department-table">
               <thead>
                 <tr>
@@ -204,28 +204,26 @@
                       <div class="department-icon">{{ department.name.charAt(0) }}</div>
                       <div>
                         <div class="department-name">{{ department.name }}</div>
-                        <div class="department-meta">成立于 {{ department.establishedYear }}</div>
+                        <div class="department-meta">成立于 {{ department.establishedTime || '-' }}</div>
                       </div>
                     </div>
                   </td>
                   <td @click="viewDepartmentDetail(department)">
-                    <span class="type-badge" :class="department.type">
-                      <span v-if="department.type === 'clinical'">临床科室</span>
-                      <span v-else-if="department.type === 'medical'">医技科室</span>
-                      <span v-else>行政科室</span>
+                    <span class="type-badge clinical">
+                      {{ getDepartmentType(department.dcId) }}
                     </span>
                   </td>
                   <td @click="viewDepartmentDetail(department)">
                     <div class="director-info">
-                      <div class="director-name">{{ department.director }}</div>
-                      <div class="director-title">{{ department.directorTitle }}</div>
+                      <div class="director-name">{{ department.doctorName || '-' }}</div>
+                      <div class="director-title">{{ department.jobTitle || '-' }}</div>
                     </div>
                   </td>
                   <td @click="viewDepartmentDetail(department)">
-                    <span class="count-number">{{ department.doctorCount }}</span>
+                    <span class="count-number">{{ department.doctorCount || 0 }}</span>
                   </td>
                   <td @click="viewDepartmentDetail(department)">
-                    <span class="count-number">{{ department.roomCount }}</span>
+                    <span class="count-number">{{ department.clinicRoomCount || 0 }}</span>
                   </td>
                   <td @click="viewDepartmentDetail(department)">
                     <div class="contact-info">
@@ -233,10 +231,10 @@
                     </div>
                   </td>
                   <td @click="viewDepartmentDetail(department)">
-                    <span class="status-badge" :class="department.status">
-                      <span v-if="department.status === 'active'">✅ 正常运营</span>
-                      <span v-else-if="department.status === 'maintenance'">🔧 维护中</span>
-                      <span v-else>⏸️ 暂停服务</span>
+                    <span class="status-badge" :class="getStatusInfo(department.status).class">
+                      <span v-if="department.status === 0">✅ {{ getStatusInfo(department.status).text }}</span>
+                      <span v-else-if="department.status === 1">🔧 {{ getStatusInfo(department.status).text }}</span>
+                      <span v-else>⏸️ {{ getStatusInfo(department.status).text }}</span>
                     </span>
                   </td>
                   <td>
@@ -261,32 +259,17 @@
           </div>
 
           <!-- 分页 -->
-          <div class="pagination" v-if="totalPages > 1">
-            <button 
-              class="page-btn" 
-              :disabled="currentPage === 1"
-              @click="changePage(currentPage - 1)"
-            >
-              上一页
-            </button>
-            <div class="page-numbers">
-              <button 
-                v-for="page in visiblePages" 
-                :key="page"
-                class="page-number" 
-                :class="{ active: page === currentPage }"
-                @click="changePage(page)"
-              >
-                {{ page }}
-              </button>
-            </div>
-            <button 
-              class="page-btn" 
-              :disabled="currentPage === totalPages"
-              @click="changePage(currentPage + 1)"
-            >
-              下一页
-            </button>
+          <div class="pagination-wrapper" v-if="pagination.total > 0">
+            <el-pagination
+              v-model:current-page="pagination.page"
+              v-model:page-size="pagination.size"
+              :page-sizes="[5, 10, 20, 50]"
+              :total="pagination.total"
+              layout="total, sizes, prev, pager, next, jumper"
+              @size-change="handleSizeChange"
+              @current-change="changePage"
+              background
+            />
           </div>
         </div>
       </main>
@@ -364,6 +347,7 @@ import { useStore } from 'vuex'
 import { ElNotification, ElMessage, ElMessageBox } from 'element-plus'
 import SideLeft from '@/components/manager/SideLeft.vue'
 import AdminHeader from '@/components/manager/AdminHeader.vue'
+import { listDepartments } from '@/api/departments'
 
 // 状态管理
 const dropdownVisible = ref(false)
@@ -373,9 +357,21 @@ const searchByDirector = ref('')
 const selectedStatus = ref('')
 const selectedType = ref('')
 const currentPage = ref(1)
-const pageSize = 10
+const pageSize = ref(10)
 const selectedDepartments = ref([])
 const showAddModal = ref(false)
+const loading = ref(false)
+
+// 分页数据
+const pagination = ref({
+  page: 1,
+  size: 10,
+  total: 0,
+  totalPage: 0
+})
+
+// 科室数据
+const departmentList = ref([])
 
 const store = useStore()
 const router = useRouter()
@@ -394,215 +390,53 @@ const newDepartment = ref({
   description: ''
 })
 
-// 模拟科室数据
-const departmentList = ref([
-  {
-    id: 1,
-    name: '内科',
-    code: 'DEPT001',
-    type: 'clinical',
-    director: '张主任',
-    directorTitle: '主任医师',
-    doctorCount: 15,
-    roomCount: 8,
-    phone: '010-12345678',
-    establishedYear: 1985,
-    status: 'active',
-    description: '负责内科疾病的诊断和治疗'
-  },
-  {
-    id: 2,
-    name: '外科',
-    code: 'DEPT002',
-    type: 'clinical',
-    director: '李主任',
-    directorTitle: '主任医师',
-    doctorCount: 12,
-    roomCount: 6,
-    phone: '010-12345679',
-    establishedYear: 1987,
-    status: 'active',
-    description: '负责外科手术和治疗'
-  },
-  {
-    id: 3,
-    name: '妇科',
-    code: 'DEPT003',
-    type: 'clinical',
-    director: '王主任',
-    directorTitle: '主任医师',
-    doctorCount: 8,
-    roomCount: 4,
-    phone: '010-12345680',
-    establishedYear: 1990,
-    status: 'active',
-    description: '专门负责妇科疾病诊治'
-  },
-  {
-    id: 4,
-    name: '儿科',
-    code: 'DEPT004',
-    type: 'clinical',
-    director: '赵主任',
-    directorTitle: '副主任医师',
-    doctorCount: 10,
-    roomCount: 5,
-    phone: '010-12345681',
-    establishedYear: 1992,
-    status: 'active',
-    description: '专门负责儿童疾病诊治'
-  },
-  {
-    id: 5,
-    name: '放射科',
-    code: 'DEPT005',
-    type: 'medical',
-    director: '钱主任',
-    directorTitle: '主任医师',
-    doctorCount: 6,
-    roomCount: 3,
-    phone: '010-12345682',
-    establishedYear: 1995,
-    status: 'maintenance',
-    description: '负责医学影像检查'
-  },
-  {
-    id: 6,
-    name: '检验科',
-    code: 'DEPT006',
-    type: 'medical',
-    director: '孙主任',
-    directorTitle: '主任技师',
-    doctorCount: 8,
-    roomCount: 2,
-    phone: '010-12345683',
-    establishedYear: 1988,
-    status: 'active',
-    description: '负责各类医学检验'
-  },
-  {
-    id: 7,
-    name: '行政办公室',
-    code: 'DEPT007',
-    type: 'administrative',
-    director: '周主任',
-    directorTitle: '主任',
-    doctorCount: 0,
-    roomCount: 5,
-    phone: '010-12345684',
-    establishedYear: 1980,
-    status: 'active',
-    description: '负责医院行政管理工作'
-  },
-  {
-    id: 8,
-    name: '骨科',
-    code: 'DEPT008',
-    type: 'clinical',
-    director: '吴主任',
-    directorTitle: '主任医师',
-    doctorCount: 9,
-    roomCount: 4,
-    phone: '010-12345685',
-    establishedYear: 2000,
-    status: 'suspended',
-    description: '专门负责骨科疾病诊治'
-  }
-])
+// 科室类型映射
+const departmentTypeMap = {
+  1: '内科',
+  2: '外科', 
+  3: '儿科',
+  4: '妇产科',
+  5: '急诊科',
+  6: '眼科',
+  7: '耳鼻喉科',
+  8: '皮肤科',
+  9: '口腔科',
+  10: '中医科',
+  11: '康复科'
+}
+
+// 状态映射
+const statusMap = {
+  0: { text: '正常运营', class: 'active' },
+  1: { text: '维护中', class: 'maintenance' },
+  2: { text: '暂停使用', class: 'suspended' }
+}
 
 // 计算属性
-const filteredDepartments = computed(() => {
-  let filtered = departmentList.value
+const paginatedDepartments = computed(() => departmentList.value)
 
-  // 按科室名称搜索
-  if (searchByName.value) {
-    const query = searchByName.value.toLowerCase()
-    filtered = filtered.filter(department => 
-      department.name.toLowerCase().includes(query)
-    )
-  }
-
-  // 按科室代码搜索
-  if (searchByCode.value) {
-    const query = searchByCode.value.toUpperCase()
-    filtered = filtered.filter(department => 
-      department.code.includes(query)
-    )
-  }
-
-  // 按主任医师搜索
-  if (searchByDirector.value) {
-    const query = searchByDirector.value.toLowerCase()
-    filtered = filtered.filter(department => 
-      department.director.toLowerCase().includes(query)
-    )
-  }
-
-  // 状态过滤
-  if (selectedStatus.value) {
-    filtered = filtered.filter(department => department.status === selectedStatus.value)
-  }
-
-  // 类型过滤
-  if (selectedType.value) {
-    filtered = filtered.filter(department => department.type === selectedType.value)
-  }
-
-  return filtered
-})
-
-const paginatedDepartments = computed(() => {
-  const start = (currentPage.value - 1) * pageSize
-  const end = start + pageSize
-  return filteredDepartments.value.slice(start, end)
-})
-
-const totalDepartments = computed(() => departmentList.value.length)
-const activeDepartments = computed(() => departmentList.value.filter(d => d.status === 'active').length)
-const maintenanceDepartments = computed(() => departmentList.value.filter(d => d.status === 'maintenance').length)
-const totalDoctors = computed(() => departmentList.value.reduce((sum, dept) => sum + dept.doctorCount, 0))
-const totalPages = computed(() => Math.ceil(filteredDepartments.value.length / pageSize))
+const totalDepartments = computed(() => pagination.value.total)
+const activeDepartments = computed(() => departmentList.value.filter(d => d.status === 0).length)
+const maintenanceDepartments = computed(() => departmentList.value.filter(d => d.status === 1).length)
+const totalDoctors = computed(() => departmentList.value.reduce((sum, dept) => sum + (dept.doctorCount || 0), 0))
+const totalPages = computed(() => pagination.value.totalPage)
 
 const isAllSelected = computed(() => {
   return paginatedDepartments.value.length > 0 && 
          paginatedDepartments.value.every(department => selectedDepartments.value.includes(department.id))
 })
 
-const visiblePages = computed(() => {
-  const pages = []
-  const total = totalPages.value
-  const current = currentPage.value
-  
-  if (total <= 7) {
-    for (let i = 1; i <= total; i++) {
-      pages.push(i)
-    }
-  } else {
-    if (current <= 4) {
-      for (let i = 1; i <= 5; i++) {
-        pages.push(i)
-      }
-      pages.push('...')
-      pages.push(total)
-    } else if (current >= total - 3) {
-      pages.push(1)
-      pages.push('...')
-      for (let i = total - 4; i <= total; i++) {
-        pages.push(i)
-      }
-    } else {
-      pages.push(1)
-      pages.push('...')
-      for (let i = current - 1; i <= current + 1; i++) {
-        pages.push(i)
-      }
-      pages.push('...')
-      pages.push(total)
-    }
-  }
-  
-  return pages
-})
+// 获取科室类型文本
+const getDepartmentType = (dcId) => {
+  return departmentTypeMap[dcId] || '未知类型'
+}
+
+// 获取状态信息
+const getStatusInfo = (status) => {
+  return statusMap[status] || { text: '未知状态', class: 'unknown' }
+}
+
+// 删除不需要的 visiblePages 计算属性，使用 Element Plus 分页组件
 
 // 方法
 const toggleDropdown = (event) => {
@@ -628,12 +462,62 @@ const handleSettingsClick = () => {
   ElMessage.info('设置功能开发中...')
 }
 
+// API调用函数
+const fetchDepartments = async () => {
+  console.log('🔍 开始获取科室列表')
+  loading.value = true
+  try {
+    const params = {
+      page: pagination.value.page,
+      size: pagination.value.size
+    }
+    
+    // 添加搜索条件
+    if (searchByName.value.trim()) {
+      params.name = searchByName.value.trim()
+    }
+    if (searchByCode.value.trim()) {
+      params.code = searchByCode.value.trim()
+    }
+    
+    console.log('📡 请求参数:', params)
+    const res = await listDepartments(params)
+    console.log('✅ 科室列表响应:', res)
+    
+    const data = res?.data || {}
+    departmentList.value = data.list || []
+    
+    // 更新分页信息
+    pagination.value = {
+      page: data.pageIndex || 1,
+      size: data.pageSize || 10,
+      total: data.totalCount || 0,
+      totalPage: data.totalPage || 1
+    }
+    
+    console.log('📊 分页信息:', pagination.value)
+    
+    if (departmentList.value.length === 0) {
+      ElMessage.info('未找到匹配的科室')
+    } else {
+      ElMessage.success(`找到 ${departmentList.value.length} 个科室`)
+    }
+  } catch (e) {
+    console.error('❌ 获取科室列表失败:', e)
+    ElMessage.error(`获取科室列表失败: ${e.message || '网络错误'}`)
+  } finally {
+    loading.value = false
+  }
+}
+
 const handleSearch = () => {
-  currentPage.value = 1
+  pagination.value.page = 1
+  fetchDepartments()
 }
 
 const handleFilter = () => {
-  currentPage.value = 1
+  pagination.value.page = 1
+  fetchDepartments()
 }
 
 const clearAllSearch = () => {
@@ -642,13 +526,22 @@ const clearAllSearch = () => {
   searchByDirector.value = ''
   selectedStatus.value = ''
   selectedType.value = ''
-  currentPage.value = 1
+  pagination.value.page = 1
+  fetchDepartments()
 }
 
 const changePage = (page) => {
   if (typeof page === 'number') {
-    currentPage.value = page
+    pagination.value.page = page
+    fetchDepartments()
   }
+}
+
+// 改变每页显示数量
+const handleSizeChange = (size) => {
+  pagination.value.size = size
+  pagination.value.page = 1
+  fetchDepartments()
 }
 
 const showAddDepartmentModal = () => {
@@ -756,8 +649,9 @@ const deleteDepartment = (departmentId) => {
     })
     
     // 如果当前页没有数据且不是第一页，跳转到上一页
-    if (paginatedDepartments.value.length === 0 && currentPage.value > 1) {
-      currentPage.value--
+    if (paginatedDepartments.value.length === 0 && pagination.value.page > 1) {
+      pagination.value.page--
+      fetchDepartments()
     }
   }
 }
@@ -827,8 +721,9 @@ const batchDeleteDepartments = () => {
     })
     
     // 调整页码
-    if (paginatedDepartments.value.length === 0 && currentPage.value > 1) {
-      currentPage.value = 1
+    if (paginatedDepartments.value.length === 0 && pagination.value.page > 1) {
+      pagination.value.page = 1
+      fetchDepartments()
     }
   }).catch(() => {
     ElMessage.info('已取消删除')
@@ -838,6 +733,8 @@ const batchDeleteDepartments = () => {
 // 生命周期
 onMounted(() => {
   document.addEventListener('click', () => (dropdownVisible.value = false))
+  // 页面加载时获取科室列表
+  fetchDepartments()
 })
 
 onUnmounted(() => {
@@ -1596,6 +1493,111 @@ $border: #ebeef5;
     .department-table {
       th, td {
         padding: 8px;
+      }
+    }
+  }
+
+  // 分页样式
+  .pagination-wrapper {
+    display: flex;
+    justify-content: center;
+    margin-top: 30px;
+    padding: 20px 0;
+    
+    :deep(.el-pagination) {
+      .el-pagination__total {
+        color: #666;
+        font-weight: 500;
+      }
+      
+      .el-pagination__sizes {
+        .el-select {
+          .el-input__inner {
+            border-radius: 8px;
+          }
+        }
+      }
+      
+      .el-pager li {
+        border-radius: 8px;
+        margin: 0 2px;
+        
+        &.active {
+          background: $primary;
+          color: white;
+        }
+        
+        &:hover:not(.active) {
+          background: #e6f7ff;
+          color: $primary;
+        }
+      }
+      
+      .btn-prev, .btn-next {
+        border-radius: 8px;
+        margin: 0 2px;
+        
+        &:hover:not(:disabled) {
+          background: #e6f7ff;
+          color: $primary;
+        }
+      }
+      
+      .el-pagination__jump {
+        .el-input__inner {
+          border-radius: 8px;
+        }
+      }
+    }
+  }
+
+  // 加载状态
+  .department-table-wrapper {
+    position: relative;
+    min-height: 400px;
+  }
+}
+
+// 响应式设计
+@media (max-width: 1200px) {
+  .department-manager .content {
+    margin-left: 0;
+    padding: 20px;
+  }
+}
+
+@media (max-width: 768px) {
+  .department-manager {
+    .stats-cards {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .quick-actions {
+      flex-direction: column;
+      
+      .action-btn {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+    
+    .search-filter-section {
+      .search-bars {
+        flex-direction: column;
+        gap: 12px;
+      }
+      
+      .filter-controls {
+        flex-direction: column;
+        gap: 12px;
+      }
+    }
+    
+    .department-table-wrapper {
+      overflow-x: auto;
+      
+      .department-table {
+        min-width: 800px;
       }
     }
   }

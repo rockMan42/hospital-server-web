@@ -86,6 +86,7 @@
     { name: '患者管理', path: '/mpatientmanager', icon: '👥', key: 'patient' },
     { name: '预约管理', path: '/myuyuemanager', icon: '📅', key: 'appointment' },
     { name: '门诊日程', path: '/schedule', icon: '🗓️', key: 'schedule' },
+    { name: '窗口挂号', path: '/registration', icon: '🧾', key: 'registration' },
     { name: '出诊管理', path: '/outpatientmanager', icon: '👨‍⚕️', key: 'outpatient' }
   ])
   
