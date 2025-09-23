@@ -133,16 +133,24 @@
           <div class="filter-controls">
             <select v-model="selectedStatus" @change="handleFilter" class="filter-select">
               <option value="">全部状态</option>
-              <option value="active">正常运营</option>
-              <option value="maintenance">维护中</option>
-              <option value="suspended">暂停服务</option>
+              <option value="0">正常运营</option>
+              <option value="1">维护中</option>
+              <option value="2">暂停使用</option>
             </select>
             
             <select v-model="selectedType" @change="handleFilter" class="filter-select">
               <option value="">全部类型</option>
-              <option value="clinical">临床科室</option>
-              <option value="medical">医技科室</option>
-              <option value="administrative">行政科室</option>
+              <option value="1">内科</option>
+              <option value="2">外科</option>
+              <option value="3">儿科</option>
+              <option value="4">妇产科</option>
+              <option value="5">急诊科</option>
+              <option value="6">眼科</option>
+              <option value="7">耳鼻喉科</option>
+              <option value="8">皮肤科</option>
+              <option value="9">口腔科</option>
+              <option value="10">中医科</option>
+              <option value="11">康复科</option>
             </select>
 
             <button class="clear-search-btn" @click="clearAllSearch" title="清空搜索">
@@ -478,6 +486,15 @@ const fetchDepartments = async () => {
     }
     if (searchByCode.value.trim()) {
       params.code = searchByCode.value.trim()
+    }
+    if (searchByDirector.value.trim()) {
+      params.doctorName = searchByDirector.value.trim()
+    }
+    if (selectedStatus.value !== '') {
+      params.status = parseInt(selectedStatus.value)
+    }
+    if (selectedType.value !== '') {
+      params.dcId = parseInt(selectedType.value)
     }
     
     console.log('📡 请求参数:', params)

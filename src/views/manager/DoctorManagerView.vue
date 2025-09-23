@@ -28,7 +28,7 @@
             <div class="card-info">
               <h3>医生总数</h3>
               <p class="number">{{ totalDoctors }}</p>
-              <p class="desc">在职医生</p>
+              <p class="desc">医生数量</p>
             </div>
           </div>
 
@@ -133,9 +133,9 @@
           <div class="filter-controls">
             <select v-model="selectedStatus" @change="handleFilter" class="filter-select">
               <option value="">全部状态</option>
-              <option value="active">在岗</option>
-              <option value="vacation">休假</option>
-              <option value="suspended">停职</option>
+              <option value="0">在岗</option>
+              <option value="1">休假</option>
+              <option value="2">停止</option>
             </select>
             
             <select v-model="selectedTitle" @change="handleFilter" class="filter-select">
@@ -161,7 +161,7 @@
           <div class="list-header">
             <h2>医生列表</h2>
             <div class="list-info">
-              共 {{ filteredDoctors.length }} 位医生
+              共 {{ totalDoctors }} 位医生
               <span v-if="selectedDoctors.length > 0" class="selected-info">
                 ，已选择 {{ selectedDoctors.length }} 位
               </span>
@@ -169,7 +169,7 @@
           </div>
 
           <!-- 医生表格 -->
-          <div class="doctor-table-wrapper">
+          <div class="doctor-table-wrapper" v-loading="loading">
             <table class="doctor-table">
               <thead>
                 <tr>
@@ -198,14 +198,14 @@
                     >
                   </td>
                   <td @click="viewDoctorDetail(doctor)">
-                    <div class="employee-id">{{ doctor.employeeId }}</div>
+                    <div class="employee-id">{{ doctor.workId }}</div>
                   </td>
                   <td @click="viewDoctorDetail(doctor)">
                     <div class="doctor-name-cell">
                       <div class="doctor-avatar">{{ doctor.name.charAt(0) }}</div>
                       <div>
                         <div class="doctor-name">{{ doctor.name }}</div>
-                        <div class="doctor-meta">{{ doctor.gender }} | {{ doctor.age }}岁</div>
+                        <div class="doctor-meta">工号: {{ doctor.workId }}</div>
                       </div>
                     </div>
                   </td>
@@ -231,10 +231,10 @@
                     <div class="hire-date">{{ formatDate(doctor.hireDate) }}</div>
                   </td>
                   <td @click="viewDoctorDetail(doctor)">
-                    <span class="status-badge" :class="doctor.status">
-                      <span v-if="doctor.status === 'active'">✅ 在岗</span>
-                      <span v-else-if="doctor.status === 'vacation'">🏖️ 休假</span>
-                      <span v-else>⏸️ 停职</span>
+                    <span class="status-badge" :class="statusMap[doctor.status]?.class">
+                      <span v-if="doctor.status === 0">✅ 在岗</span>
+                      <span v-else-if="doctor.status === 1">🏖️ 休假</span>
+                      <span v-else>⏸️ 停止</span>
                     </span>
                   </td>
                   <td>
@@ -258,33 +258,17 @@
             </table>
           </div>
 
-          <!-- 分页 -->
-          <div class="pagination" v-if="totalPages > 1">
-            <button 
-              class="page-btn" 
-              :disabled="currentPage === 1"
-              @click="changePage(currentPage - 1)"
-            >
-              上一页
-            </button>
-            <div class="page-numbers">
-              <button 
-                v-for="page in visiblePages" 
-                :key="page"
-                class="page-number" 
-                :class="{ active: page === currentPage }"
-                @click="changePage(page)"
-              >
-                {{ page }}
-              </button>
-            </div>
-            <button 
-              class="page-btn" 
-              :disabled="currentPage === totalPages"
-              @click="changePage(currentPage + 1)"
-            >
-              下一页
-            </button>
+          <!-- Element Plus 分页组件 -->
+          <div class="pagination-wrapper" v-if="pagination.total > 0">
+            <el-pagination
+              v-model:current-page="pagination.page"
+              v-model:page-size="pagination.size"
+              :page-sizes="[5, 10, 20, 50]"
+              :total="pagination.total"
+              layout="total, sizes, prev, pager, next, jumper"
+              @size-change="handleSizeChange"
+              @current-change="changePage"
+            />
           </div>
         </div>
       </main>
@@ -305,7 +289,7 @@
             </div>
             <div class="form-group">
               <label>工号 <span class="required">*</span></label>
-              <input v-model="newDoctor.employeeId" type="text" placeholder="请输入工号">
+              <input v-model="newDoctor.workId" type="text" placeholder="请输入工号">
             </div>
             <div class="form-group">
               <label>性别 <span class="required">*</span></label>
@@ -321,29 +305,25 @@
             </div>
             <div class="form-group">
               <label>职称 <span class="required">*</span></label>
-              <select v-model="newDoctor.title">
+              <select v-model="newDoctor.ptId">
                 <option value="">请选择职称</option>
-                <option value="主任医师">主任医师</option>
-                <option value="副主任医师">副主任医师</option>
-                <option value="主治医师">主治医师</option>
-                <option value="住院医师">住院医师</option>
+                <option v-for="option in titleOptions" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
               </select>
             </div>
             <div class="form-group">
-              <label>科室 <span class="required">*</span></label>
-              <select v-model="newDoctor.department">
-                <option value="">请选择科室</option>
-                <option value="内科">内科</option>
-                <option value="外科">外科</option>
-                <option value="妇科">妇科</option>
-                <option value="儿科">儿科</option>
-                <option value="骨科">骨科</option>
-                <option value="皮肤科">皮肤科</option>
+              <label>诊室 <span class="required">*</span></label>
+              <select v-model="newDoctor.clinicRoomId">
+                <option value="">请选择诊室</option>
+                <option v-for="option in clinicRoomOptions" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
               </select>
             </div>
             <div class="form-group">
-              <label>专业</label>
-              <input v-model="newDoctor.specialty" type="text" placeholder="请输入专业方向">
+              <label>专业方向</label>
+              <input v-model="newDoctor.majorDirect" type="text" placeholder="请输入专业方向">
             </div>
             <div class="form-group">
               <label>联系电话</label>
@@ -351,25 +331,170 @@
             </div>
             <div class="form-group">
               <label>入职时间</label>
-              <input v-model="newDoctor.hireDate" type="date">
+              <input v-model="newDoctor.enterDate" type="date">
             </div>
             <div class="form-group">
               <label>初始状态</label>
               <select v-model="newDoctor.status">
-                <option value="active">在岗</option>
-                <option value="vacation">休假</option>
-                <option value="suspended">停职</option>
+                <option :value="0">在岗</option>
+                <option :value="1">休假</option>
+                <option :value="2">停职</option>
               </select>
             </div>
             <div class="form-group full-width">
-              <label>备注</label>
-              <textarea v-model="newDoctor.remarks" placeholder="请输入备注信息" rows="3"></textarea>
+              <label>描述</label>
+              <textarea v-model="newDoctor.description" placeholder="请输入医生描述信息" rows="3"></textarea>
             </div>
           </div>
         </div>
         <div class="modal-footer">
           <button class="action-btn outline" @click="closeAddDoctorModal">取消</button>
           <button class="action-btn primary" @click="addDoctor">确认添加</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 医生详情弹窗 -->
+    <div v-if="showDetailModal" class="modal-overlay" @click="closeDetailModal">
+      <div class="modal-content detail-modal" @click.stop>
+        <div class="modal-header">
+          <h3>医生详情</h3>
+          <button class="close-btn" @click="closeDetailModal">×</button>
+        </div>
+        <div class="modal-body" v-loading="detailLoading">
+          <div v-if="doctorDetail" class="detail-content">
+            <!-- 基本信息 -->
+            <div class="detail-section">
+              <h4>基本信息</h4>
+              <div class="detail-grid">
+                <div class="detail-item">
+                  <label>医生姓名：</label>
+                  <span>{{ doctorDetail.name }}</span>
+                </div>
+                <div class="detail-item">
+                  <label>工号：</label>
+                  <span class="work-id">{{ doctorDetail.workId }}</span>
+                </div>
+                <div class="detail-item">
+                  <label>职称：</label>
+                  <span class="title-badge" :class="getTitleClass(doctorDetail.profashionTitle)">
+                    {{ doctorDetail.profashionTitle }}
+                  </span>
+                </div>
+                <div class="detail-item">
+                  <label>科室：</label>
+                  <span>{{ doctorDetail.departmentName }}</span>
+                </div>
+                <div class="detail-item">
+                  <label>专业方向：</label>
+                  <span>{{ doctorDetail.majorDirect || '暂无' }}</span>
+                </div>
+                <div class="detail-item">
+                  <label>联系电话：</label>
+                  <span>{{ doctorDetail.phone || '暂无' }}</span>
+                </div>
+                <div class="detail-item">
+                  <label>入职时间：</label>
+                  <span>{{ formatDate(doctorDetail.enterDate) }}</span>
+                </div>
+                <div class="detail-item">
+                  <label>当前状态：</label>
+                  <span class="status-badge" :class="statusMap[doctorDetail.status]?.class">
+                    <span v-if="doctorDetail.status === 0">✅ 在岗</span>
+                    <span v-else-if="doctorDetail.status === 1">🏖️ 休假</span>
+                    <span v-else>⏸️ 停职</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div v-else class="no-data">
+            <p>暂无医生详情数据</p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="action-btn outline" @click="closeDetailModal">关闭</button>
+          <button class="action-btn primary" @click="editDoctor(doctorDetail)">编辑医生</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 编辑医生弹窗 -->
+    <div v-if="showEditModal" class="modal-overlay" @click="closeEditModal">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h3>编辑医生</h3>
+          <button class="close-btn" @click="closeEditModal">×</button>
+        </div>
+        <div class="modal-body" v-loading="editLoading">
+          <div class="form-grid">
+            <div class="form-group">
+              <label>医生姓名 <span class="required">*</span></label>
+              <input v-model="editDoctorData.name" type="text" placeholder="请输入医生姓名">
+            </div>
+            <div class="form-group">
+              <label>工号 <span class="required">*</span></label>
+              <input v-model="editDoctorData.workId" type="text" placeholder="请输入工号">
+            </div>
+            <div class="form-group">
+              <label>性别 <span class="required">*</span></label>
+              <select v-model="editDoctorData.gender">
+                <option value="">请选择</option>
+                <option value="男">男</option>
+                <option value="女">女</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>年龄 <span class="required">*</span></label>
+              <input v-model="editDoctorData.age" type="number" placeholder="请输入年龄" min="20" max="70">
+            </div>
+            <div class="form-group">
+              <label>职称 <span class="required">*</span></label>
+              <select v-model="editDoctorData.ptId">
+                <option value="">请选择职称</option>
+                <option v-for="option in titleOptions" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>诊室 <span class="required">*</span></label>
+              <select v-model="editDoctorData.clinicRoomId">
+                <option value="">请选择诊室</option>
+                <option v-for="option in clinicRoomOptions" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>专业方向</label>
+              <input v-model="editDoctorData.majorDirect" type="text" placeholder="请输入专业方向">
+            </div>
+            <div class="form-group">
+              <label>联系电话</label>
+              <input v-model="editDoctorData.phone" type="text" placeholder="请输入联系电话">
+            </div>
+            <div class="form-group">
+              <label>入职时间</label>
+              <input v-model="editDoctorData.enterDate" type="date">
+            </div>
+            <div class="form-group">
+              <label>医生状态</label>
+              <select v-model="editDoctorData.status">
+                <option :value="0">在岗</option>
+                <option :value="1">休假</option>
+                <option :value="2">停职</option>
+              </select>
+            </div>
+            <div class="form-group full-width">
+              <label>描述</label>
+              <textarea v-model="editDoctorData.description" placeholder="请输入医生描述信息" rows="3"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="action-btn outline" @click="closeEditModal">取消</button>
+          <button class="action-btn primary" @click="updateDoctorInfo">保存修改</button>
         </div>
       </div>
     </div>
@@ -383,6 +508,7 @@ import { useStore } from 'vuex'
 import { ElNotification, ElMessage, ElMessageBox } from 'element-plus'
 import SideLeft from '@/components/manager/SideLeft.vue'
 import AdminHeader from '@/components/manager/AdminHeader.vue'
+import { getDoctorFullPage, createDoctor, getDoctorDetail, updateDoctor, deleteDoctor } from '@/api/doctors'
 
 // 状态管理
 const dropdownVisible = ref(false)
@@ -391,10 +517,21 @@ const searchByEmployeeId = ref('')
 const searchByDepartment = ref('')
 const selectedStatus = ref('')
 const selectedTitle = ref('')
-const currentPage = ref(1)
-const pageSize = 10
 const selectedDoctors = ref([])
 const showAddModal = ref(false)
+const showDetailModal = ref(false)
+const showEditModal = ref(false)
+const loading = ref(false)
+const detailLoading = ref(false)
+const editLoading = ref(false)
+
+// 分页数据
+const pagination = ref({
+  page: 1,
+  size: 10,
+  total: 0,
+  totalPage: 0
+})
 
 const store = useStore()
 const router = useRouter()
@@ -403,196 +540,227 @@ let username = store.state.user?.username || '管理员'
 // 新医生表单数据
 const newDoctor = ref({
   name: '',
-  employeeId: '',
+  workId: '',
   gender: '',
   age: '',
-  title: '',
-  department: '',
-  specialty: '',
+  clinicRoomId: '',
+  ptId: '',
+  majorDirect: '',
   phone: '',
-  hireDate: new Date().toISOString().split('T')[0],
-  status: 'active',
-  remarks: ''
+  enterDate: new Date().toISOString().split('T')[0],
+  status: 0,
+  description: ''
 })
 
-// 模拟医生数据
-const doctorList = ref([
-  {
-    id: 1,
-    name: '张医生',
-    employeeId: 'DOC001',
-    gender: '男',
-    age: 45,
-    title: '主任医师',
-    department: '内科',
-    specialty: '心血管内科',
-    phone: '138-0000-0001',
-    hireDate: '2010-03-15',
-    status: 'active'
-  },
-  {
-    id: 2,
-    name: '李医生',
-    employeeId: 'DOC002',
-    gender: '女',
-    age: 38,
-    title: '副主任医师',
-    department: '外科',
-    specialty: '普通外科',
-    phone: '138-0000-0002',
-    hireDate: '2015-07-20',
-    status: 'active'
-  },
-  {
-    id: 3,
-    name: '王医生',
-    employeeId: 'DOC003',
-    gender: '男',
-    age: 42,
-    title: '主治医师',
-    department: '妇科',
-    specialty: '妇产科',
-    phone: '138-0000-0003',
-    hireDate: '2012-09-10',
-    status: 'vacation'
-  },
-  {
-    id: 4,
-    name: '赵医生',
-    employeeId: 'DOC004',
-    gender: '女',
-    age: 35,
-    title: '主治医师',
-    department: '儿科',
-    specialty: '儿童保健',
-    phone: '138-0000-0004',
-    hireDate: '2018-01-08',
-    status: 'active'
-  },
-  {
-    id: 5,
-    name: '钱医生',
-    employeeId: 'DOC005',
-    gender: '男',
-    age: 50,
-    title: '主任医师',
-    department: '骨科',
-    specialty: '脊柱外科',
-    phone: '138-0000-0005',
-    hireDate: '2008-11-25',
-    status: 'active'
-  },
-  {
-    id: 6,
-    name: '孙医生',
-    employeeId: 'DOC006',
-    gender: '女',
-    age: 29,
-    title: '住院医师',
-    department: '皮肤科',
-    specialty: '皮肤病学',
-    phone: '138-0000-0006',
-    hireDate: '2020-06-15',
-    status: 'suspended'
-  }
-])
+// 医生数据
+const doctorList = ref([])
+const doctorDetail = ref(null)
+const editDoctorData = ref({
+  id: null,
+  name: '',
+  workId: '',
+  gender: '',
+  age: '',
+  clinicRoomId: '',
+  ptId: '',
+  majorDirect: '',
+  phone: '',
+  enterDate: '',
+  status: 0,
+  description: ''
+})
+
+// 职称映射
+const titleMap = {
+  1: '主任医师',
+  2: '副主任医师', 
+  3: '主治医师',
+  4: '住院医师',
+  5: '实习医师',
+  6: '主任医师',
+  7: '副主任医师',
+  8: '主治医师',
+  9: '住院医师',
+  10: '主任医师',
+  11: '主治医师'
+}
+
+// 诊室映射
+const clinicRoomMap = {
+  9: '内科普通门诊',
+  10: '内科专家门诊',
+  11: '外科门诊',
+  12: '备用诊室，暂未启用',
+  35: '心内科普通门诊',
+  36: '心内科专家门诊',
+  37: '普外科门诊',
+  38: '备用诊室，暂未启用',
+  39: '急诊科门诊',
+  40: '眼科门诊',
+  41: '耳鼻喉科门诊',
+  42: '皮肤科备用诊室',
+  43: '口腔科门诊',
+  44: '中医科门诊',
+  45: '康复科门诊'
+}
+
+// 职称选项（用于表单下拉选择）
+const titleOptions = [
+  { value: 1, label: '主任医师' },
+  { value: 2, label: '副主任医师' },
+  { value: 3, label: '主治医师' },
+  { value: 4, label: '住院医师' },
+  { value: 5, label: '实习医师' }
+]
+
+// 诊室选项（用于表单下拉选择）
+const clinicRoomOptions = [
+  { value: 9, label: '内科普通门诊' },
+  { value: 10, label: '内科专家门诊' },
+  { value: 11, label: '外科门诊' },
+  { value: 35, label: '心内科普通门诊' },
+  { value: 36, label: '心内科专家门诊' },
+  { value: 37, label: '普外科门诊' },
+  { value: 39, label: '急诊科门诊' },
+  { value: 40, label: '眼科门诊' },
+  { value: 41, label: '耳鼻喉科门诊' },
+  { value: 43, label: '口腔科门诊' },
+  { value: 44, label: '中医科门诊' },
+  { value: 45, label: '康复科门诊' }
+]
+
+// 状态映射
+const statusMap = {
+  0: { text: '在岗', class: 'active' },
+  1: { text: '休假', class: 'vacation' },
+  2: { text: '停止', class: 'suspended' }
+}
 
 // 计算属性
-const filteredDoctors = computed(() => {
-  let filtered = doctorList.value
+const paginatedDoctors = computed(() => doctorList.value)
 
-  // 按医生姓名搜索
-  if (searchByName.value) {
-    const query = searchByName.value.toLowerCase()
-    filtered = filtered.filter(doctor => 
-      doctor.name.toLowerCase().includes(query)
-    )
-  }
-
-  // 按工号搜索
-  if (searchByEmployeeId.value) {
-    const query = searchByEmployeeId.value.toUpperCase()
-    filtered = filtered.filter(doctor => 
-      doctor.employeeId.includes(query)
-    )
-  }
-
-  // 按科室搜索
-  if (searchByDepartment.value) {
-    const query = searchByDepartment.value.toLowerCase()
-    filtered = filtered.filter(doctor => 
-      doctor.department.toLowerCase().includes(query)
-    )
-  }
-
-  // 状态过滤
-  if (selectedStatus.value) {
-    filtered = filtered.filter(doctor => doctor.status === selectedStatus.value)
-  }
-
-  // 职称过滤
-  if (selectedTitle.value) {
-    filtered = filtered.filter(doctor => doctor.title === selectedTitle.value)
-  }
-
-  return filtered
+const totalDoctors = computed(() => {
+  const total = pagination.value.total
+  console.log('🔢 总医生数:', total)
+  return total
 })
 
-const paginatedDoctors = computed(() => {
-  const start = (currentPage.value - 1) * pageSize
-  const end = start + pageSize
-  return filteredDoctors.value.slice(start, end)
+const activeDoctors = computed(() => {
+  const activeList = doctorList.value.filter(d => d.status === 0)
+  console.log('✅ 在岗医生:', activeList.length, '详情:', activeList.map(d => ({ name: d.name, status: d.status })))
+  return activeList.length
 })
 
-const totalDoctors = computed(() => doctorList.value.length)
-const activeDoctors = computed(() => doctorList.value.filter(d => d.status === 'active').length)
-const vacationDoctors = computed(() => doctorList.value.filter(d => d.status === 'vacation').length)
+const vacationDoctors = computed(() => {
+  const vacationList = doctorList.value.filter(d => d.status === 1)
+  console.log('🏖️ 休假医生:', vacationList.length, '详情:', vacationList.map(d => ({ name: d.name, status: d.status })))
+  return vacationList.length
+})
+
 const departmentCoverage = computed(() => {
-  const departments = new Set(doctorList.value.map(d => d.department))
+  const departments = new Set(doctorList.value.map(d => d.departmentName))
+  console.log('🏥 科室覆盖:', departments.size, '科室列表:', Array.from(departments))
   return departments.size
 })
-const totalPages = computed(() => Math.ceil(filteredDoctors.value.length / pageSize))
 
 const isAllSelected = computed(() => {
   return paginatedDoctors.value.length > 0 && 
          paginatedDoctors.value.every(doctor => selectedDoctors.value.includes(doctor.id))
 })
 
-const visiblePages = computed(() => {
-  const pages = []
-  const total = totalPages.value
-  const current = currentPage.value
-  
-  if (total <= 7) {
-    for (let i = 1; i <= total; i++) {
-      pages.push(i)
+// API调用函数
+const fetchDoctors = async () => {
+  console.log('🔍 开始获取医生列表')
+  loading.value = true
+  try {
+    const params = {
+      page: pagination.value.page,
+      size: pagination.value.size
     }
-  } else {
-    if (current <= 4) {
-      for (let i = 1; i <= 5; i++) {
-        pages.push(i)
+    
+    // 添加搜索条件
+    if (searchByName.value.trim()) {
+      params.name = searchByName.value.trim()
+    }
+    if (searchByEmployeeId.value.trim()) {
+      params.workId = searchByEmployeeId.value.trim()
+    }
+    if (searchByDepartment.value.trim()) {
+      params.departmentName = searchByDepartment.value.trim()
+    }
+    if (selectedStatus.value !== '') {
+      params.status = parseInt(selectedStatus.value)
+    }
+    if (selectedTitle.value !== '') {
+      // 根据职称名称找到对应的ID
+      const titleId = Object.keys(titleMap).find(key => titleMap[key] === selectedTitle.value)
+      if (titleId) {
+        params.ptId = parseInt(titleId)
       }
-      pages.push('...')
-      pages.push(total)
-    } else if (current >= total - 3) {
-      pages.push(1)
-      pages.push('...')
-      for (let i = total - 4; i <= total; i++) {
-        pages.push(i)
-      }
+    }
+    
+    console.log('📡 请求参数:', params)
+    const res = await getDoctorFullPage(params)
+    console.log('✅ 医生列表响应:', res)
+    
+    const data = res?.data || {}
+    doctorList.value = (data.list || []).map(doctor => ({
+      id: doctor.id,
+      workId: doctor.workId,
+      name: doctor.name,
+      title: doctor.profashionTitle,
+      department: doctor.departmentName,
+      departmentName: doctor.departmentName, // 保持原字段名用于计算属性
+      specialty: doctor.majorDirect,
+      phone: doctor.phone,
+      hireDate: doctor.enterDate,
+      status: Number(doctor.status) // 确保status是数字类型
+    }))
+    
+    // 更新分页信息
+    pagination.value = {
+      page: data.pageIndex || 1,
+      size: data.pageSize || 10,
+      total: data.totalCount || 0,
+      totalPage: data.totalPage || 1
+    }
+    
+    console.log('📊 分页信息:', pagination.value)
+    console.log('👥 医生列表数据:', doctorList.value)
+    
+    // 详细的状态分析
+    const statusAnalysis = doctorList.value.map(d => ({
+      name: d.name,
+      status: d.status,
+      statusType: typeof d.status
+    }))
+    console.log('🔍 医生状态详细分析:', statusAnalysis)
+    
+    const activeCount = doctorList.value.filter(d => d.status === 0).length
+    const vacationCount = doctorList.value.filter(d => d.status === 1).length
+    const suspendedCount = doctorList.value.filter(d => d.status === 2).length
+    
+    console.log('📈 统计数据:', {
+      total: pagination.value.total,
+      listLength: doctorList.value.length,
+      active: activeCount,
+      vacation: vacationCount,
+      suspended: suspendedCount,
+      departments: new Set(doctorList.value.map(d => d.departmentName)).size
+    })
+    
+    if (doctorList.value.length === 0) {
+      ElMessage.info('未找到匹配的医生')
     } else {
-      pages.push(1)
-      pages.push('...')
-      for (let i = current - 1; i <= current + 1; i++) {
-        pages.push(i)
-      }
-      pages.push('...')
-      pages.push(total)
+      ElMessage.success(`找到 ${doctorList.value.length} 个医生`)
     }
+  } catch (e) {
+    console.error('❌ 获取医生列表失败:', e)
+    ElMessage.error(`获取医生列表失败: ${e.message || '网络错误'}`)
+  } finally {
+    loading.value = false
   }
-  
-  return pages
-})
+}
 
 // 方法
 const toggleDropdown = (event) => {
@@ -619,11 +787,13 @@ const handleSettingsClick = () => {
 }
 
 const handleSearch = () => {
-  currentPage.value = 1
+  pagination.value.page = 1
+  fetchDoctors()
 }
 
 const handleFilter = () => {
-  currentPage.value = 1
+  pagination.value.page = 1
+  fetchDoctors()
 }
 
 const clearAllSearch = () => {
@@ -632,13 +802,22 @@ const clearAllSearch = () => {
   searchByDepartment.value = ''
   selectedStatus.value = ''
   selectedTitle.value = ''
-  currentPage.value = 1
+  pagination.value.page = 1
+  fetchDoctors()
 }
 
 const changePage = (page) => {
   if (typeof page === 'number') {
-    currentPage.value = page
+    pagination.value.page = page
+    fetchDoctors()
   }
+}
+
+// 改变每页显示数量
+const handleSizeChange = (size) => {
+  pagination.value.size = size
+  pagination.value.page = 1
+  fetchDoctors()
 }
 
 const formatDate = (dateString) => {
@@ -665,58 +844,312 @@ const closeAddDoctorModal = () => {
   // 重置表单
   newDoctor.value = {
     name: '',
-    employeeId: '',
+    workId: '',
     gender: '',
     age: '',
-    title: '',
-    department: '',
-    specialty: '',
+    clinicRoomId: '',
+    ptId: '',
+    majorDirect: '',
     phone: '',
-    hireDate: new Date().toISOString().split('T')[0],
-    status: 'active',
-    remarks: ''
+    enterDate: new Date().toISOString().split('T')[0],
+    status: 0,
+    description: ''
   }
 }
 
-const addDoctor = () => {
-  // 简单验证
-  if (!newDoctor.value.name || !newDoctor.value.employeeId || !newDoctor.value.gender || 
-      !newDoctor.value.age || !newDoctor.value.title || !newDoctor.value.department) {
-    ElMessage.warning('请填写必要信息（姓名、工号、性别、年龄、职称、科室）')
+const addDoctor = async () => {
+  // 表单验证
+  if (!newDoctor.value.name || !newDoctor.value.workId || !newDoctor.value.gender || 
+      !newDoctor.value.age || !newDoctor.value.ptId || !newDoctor.value.clinicRoomId) {
+    ElMessage.warning('请填写必要信息（姓名、工号、性别、年龄、职称、诊室）')
     return
   }
 
-  // 检查工号是否重复
-  const employeeIdExists = doctorList.value.some(doctor => doctor.employeeId === newDoctor.value.employeeId)
-  if (employeeIdExists) {
-    ElMessage.warning('工号已存在，请使用其他工号')
+  // 年龄验证
+  const age = parseInt(newDoctor.value.age)
+  if (isNaN(age) || age < 20 || age > 70) {
+    ElMessage.warning('请输入有效的年龄（20-70岁）')
     return
   }
 
-  // 添加新医生
-  const doctor = {
-    id: Date.now(),
-    ...newDoctor.value,
-    age: parseInt(newDoctor.value.age)
+  // 手机号验证（如果填写了）
+  if (newDoctor.value.phone && !/^1[3-9]\d{9}$/.test(newDoctor.value.phone)) {
+    ElMessage.warning('请输入有效的手机号码')
+    return
   }
 
-  doctorList.value.unshift(doctor)
-  
-  ElNotification({
-    title: '添加成功',
-    message: `医生 ${doctor.name} 已成功添加`,
-    type: 'success'
-  })
+  try {
+    loading.value = true
+    
+    // 准备API请求数据
+    const doctorData = {
+      name: newDoctor.value.name.trim(),
+      workId: newDoctor.value.workId.trim(),
+      gender: newDoctor.value.gender,
+      age: age,
+      clinicRoomId: parseInt(newDoctor.value.clinicRoomId),
+      ptId: parseInt(newDoctor.value.ptId),
+      majorDirect: newDoctor.value.majorDirect.trim() || undefined,
+      phone: newDoctor.value.phone.trim() || undefined,
+      enterDate: newDoctor.value.enterDate || undefined,
+      status: newDoctor.value.status,
+      description: newDoctor.value.description.trim() || undefined
+    }
 
-  closeAddDoctorModal()
+    console.log('🔄 正在创建医生:', doctorData)
+    
+    // 调用API创建医生
+    const response = await createDoctor(doctorData)
+    console.log('✅ 创建医生响应:', response)
+    
+    if (response && response.code === 200) {
+      ElNotification({
+        title: '添加成功',
+        message: `医生 ${doctorData.name} 已成功添加`,
+        type: 'success'
+      })
+      
+      // 关闭弹窗
+      closeAddDoctorModal()
+      
+      // 刷新医生列表
+      await fetchDoctors()
+    } else {
+      ElMessage.error(response?.msg || '添加医生失败')
+    }
+  } catch (error) {
+    console.error('❌ 添加医生失败:', error)
+    ElMessage.error(`添加医生失败: ${error.message || '网络错误'}`)
+  } finally {
+    loading.value = false
+  }
 }
 
-const viewDoctorDetail = (doctor) => {
-  ElMessage.info(`查看医生详情：${doctor.name}`)
+const viewDoctorDetail = async (doctor) => {
+  try {
+    detailLoading.value = true
+    showDetailModal.value = true
+    doctorDetail.value = null
+    
+    console.log('🔍 正在获取医生详情:', doctor.id)
+    
+    const response = await getDoctorDetail(doctor.id)
+    console.log('✅ 医生详情响应:', response)
+    
+    if (response && response.code === 200) {
+      doctorDetail.value = response.data
+    } else {
+      ElMessage.error(response?.msg || '获取医生详情失败')
+      showDetailModal.value = false
+    }
+  } catch (error) {
+    console.error('❌ 获取医生详情失败:', error)
+    ElMessage.error(`获取医生详情失败: ${error.message || '网络错误'}`)
+    showDetailModal.value = false
+  } finally {
+    detailLoading.value = false
+  }
 }
 
-const editDoctor = (doctor) => {
-  ElMessage.info(`编辑医生：${doctor.name}`)
+const closeDetailModal = () => {
+  showDetailModal.value = false
+  doctorDetail.value = null
+}
+
+const editDoctor = async (doctor) => {
+  try {
+    editLoading.value = true
+    showEditModal.value = true
+    
+    // 重置编辑表单数据
+    editDoctorData.value = {
+      id: null,
+      name: '',
+      workId: '',
+      gender: '',
+      age: '',
+      clinicRoomId: '',
+      ptId: '',
+      majorDirect: '',
+      phone: '',
+      enterDate: '',
+      status: 0,
+      description: ''
+    }
+    
+    console.log('🔍 正在获取医生详情用于编辑:', doctor.id)
+    
+    const response = await getDoctorDetail(doctor.id)
+    console.log('✅ 编辑医生详情响应:', response)
+    
+    if (response && response.code === 200) {
+      const data = response.data
+      
+      // 根据职称名称找到对应的ID
+      const getPtIdByTitle = (title) => {
+        const titleOption = titleOptions.find(option => option.label === title)
+        return titleOption ? titleOption.value : ''
+      }
+      
+      // 根据科室名称找到对应的诊室ID
+      const getClinicRoomIdByDepartment = (departmentName) => {
+        // 根据科室名称匹配诊室ID的映射关系
+        const departmentToClinicRoom = {
+          '内科': 9,        // 内科普通门诊
+          '外科': 11,       // 外科门诊
+          '心内科': 35,     // 心内科普通门诊
+          '普外科': 37,     // 普外科门诊
+          '急诊科': 39,     // 急诊科门诊
+          '眼科': 40,       // 眼科门诊
+          '耳鼻喉科': 41,   // 耳鼻喉科门诊
+          '口腔科': 43,     // 口腔科门诊
+          '中医科': 44,     // 中医科门诊
+          '康复科': 45      // 康复科门诊
+        }
+        
+        // 尝试精确匹配
+        if (departmentToClinicRoom[departmentName]) {
+          return departmentToClinicRoom[departmentName]
+        }
+        
+        // 尝试模糊匹配
+        for (const [dept, roomId] of Object.entries(departmentToClinicRoom)) {
+          if (departmentName && departmentName.includes(dept)) {
+            return roomId
+          }
+        }
+        
+        // 如果都匹配不到，返回默认的内科普通门诊
+        return 9
+      }
+      
+      // 回显数据到编辑表单
+      editDoctorData.value = {
+        id: data.id,
+        name: data.name || '',
+        workId: data.workId || '',
+        gender: data.gender || '', // 直接从API响应获取
+        age: data.age || '', // 直接从API响应获取
+        clinicRoomId: getClinicRoomIdByDepartment(data.departmentName), // 根据科室名称推导
+        ptId: getPtIdByTitle(data.profashionTitle), // 根据职称名称找ID
+        majorDirect: data.majorDirect || '',
+        phone: data.phone || '',
+        enterDate: data.enterDate ? data.enterDate.split('T')[0] : '',
+        status: data.status || 0,
+        description: data.description || '' // 直接从API响应获取
+      }
+      
+      console.log('📝 编辑表单数据回显完成:', editDoctorData.value)
+      
+      // 提示用户数据回显成功
+      ElMessage({
+        message: '医生信息已完整回显，可以开始编辑',
+        type: 'success',
+        duration: 2000
+      })
+    } else {
+      ElMessage.error(response?.msg || '获取医生详情失败')
+      showEditModal.value = false
+    }
+  } catch (error) {
+    console.error('❌ 获取医生详情失败:', error)
+    ElMessage.error(`获取医生详情失败: ${error.message || '网络错误'}`)
+    showEditModal.value = false
+  } finally {
+    editLoading.value = false
+  }
+}
+
+const closeEditModal = () => {
+  showEditModal.value = false
+  editDoctorData.value = {
+    id: null,
+    name: '',
+    workId: '',
+    gender: '',
+    age: '',
+    clinicRoomId: '',
+    ptId: '',
+    majorDirect: '',
+    phone: '',
+    enterDate: '',
+    status: 0,
+    description: ''
+  }
+}
+
+const updateDoctorInfo = async () => {
+  // 表单验证
+  if (!editDoctorData.value.name || !editDoctorData.value.workId || !editDoctorData.value.gender || 
+      !editDoctorData.value.age || !editDoctorData.value.ptId || !editDoctorData.value.clinicRoomId) {
+    ElMessage.warning('请填写必要信息（姓名、工号、性别、年龄、职称、诊室）')
+    return
+  }
+
+  // 年龄验证
+  const age = parseInt(editDoctorData.value.age)
+  if (isNaN(age) || age < 20 || age > 70) {
+    ElMessage.warning('请输入有效的年龄（20-70岁）')
+    return
+  }
+
+  // 手机号验证（如果填写了）
+  if (editDoctorData.value.phone && !/^1[3-9]\d{9}$/.test(editDoctorData.value.phone)) {
+    ElMessage.warning('请输入有效的手机号码')
+    return
+  }
+
+  try {
+    loading.value = true
+    
+    // 准备API请求数据
+    const updateData = {
+      id: editDoctorData.value.id,
+      name: editDoctorData.value.name.trim(),
+      workId: editDoctorData.value.workId.trim(),
+      gender: editDoctorData.value.gender,
+      age: age,
+      ptId: parseInt(editDoctorData.value.ptId),
+      clinicRoomId: parseInt(editDoctorData.value.clinicRoomId),
+      majorDirect: editDoctorData.value.majorDirect.trim() || undefined,
+      phone: editDoctorData.value.phone.trim() || undefined,
+      enterDate: editDoctorData.value.enterDate || undefined,
+      status: editDoctorData.value.status,
+      description: editDoctorData.value.description.trim() || undefined
+    }
+
+    console.log('🔄 正在更新医生信息:', updateData)
+    
+    // 调用API更新医生
+    const response = await updateDoctor(updateData)
+    console.log('✅ 更新医生响应:', response)
+    
+    if (response && response.code === 200) {
+      ElNotification({
+        title: '更新成功',
+        message: `医生 ${updateData.name} 信息已成功更新`,
+        type: 'success'
+      })
+      
+      // 关闭编辑弹窗
+      closeEditModal()
+      
+      // 关闭详情弹窗（如果打开的话）
+      if (showDetailModal.value) {
+        closeDetailModal()
+      }
+      
+      // 刷新医生列表
+      await fetchDoctors()
+    } else {
+      ElMessage.error(response?.msg || '更新医生信息失败')
+    }
+  } catch (error) {
+    console.error('❌ 更新医生信息失败:', error)
+    ElMessage.error(`更新医生信息失败: ${error.message || '网络错误'}`)
+  } finally {
+    loading.value = false
+  }
 }
 
 const manageSchedule = (doctor) => {
@@ -734,34 +1167,40 @@ const confirmDeleteDoctor = (doctor) => {
       confirmButtonClass: 'el-button--danger'
     }
   ).then(() => {
-    deleteDoctor(doctor.id)
+    deleteDoctorById(doctor.id)
   }).catch(() => {
     ElMessage.info('已取消删除')
   })
 }
 
-const deleteDoctor = (doctorId) => {
-  const index = doctorList.value.findIndex(d => d.id === doctorId)
-  if (index > -1) {
-    const deletedDoctor = doctorList.value[index]
-    doctorList.value.splice(index, 1)
+const deleteDoctorById = async (doctorId) => {
+  try {
+    console.log('🗑️ 开始删除医生:', doctorId)
     
-    // 从选中列表中移除
-    const selectedIndex = selectedDoctors.value.indexOf(doctorId)
-    if (selectedIndex > -1) {
-      selectedDoctors.value.splice(selectedIndex, 1)
+    const response = await deleteDoctor([doctorId])
+    console.log('✅ 删除医生响应:', response)
+    
+    if (response && response.code === 200) {
+      // 从选中列表中移除
+      const selectedIndex = selectedDoctors.value.indexOf(doctorId)
+      if (selectedIndex > -1) {
+        selectedDoctors.value.splice(selectedIndex, 1)
+      }
+      
+      ElNotification({
+        title: '删除成功',
+        message: response.msg || '医生已被删除',
+        type: 'success'
+      })
+      
+      // 重新获取医生列表
+      await fetchDoctors()
+    } else {
+      ElMessage.error(response?.msg || '删除医生失败')
     }
-    
-    ElNotification({
-      title: '删除成功',
-      message: `医生 ${deletedDoctor.name} 已被删除`,
-      type: 'success'
-    })
-    
-    // 如果当前页没有数据且不是第一页，跳转到上一页
-    if (paginatedDoctors.value.length === 0 && currentPage.value > 1) {
-      currentPage.value--
-    }
+  } catch (error) {
+    console.error('❌ 删除医生失败:', error)
+    ElMessage.error(`删除医生失败: ${error.message || '网络错误'}`)
   }
 }
 
@@ -799,46 +1238,58 @@ const toggleDoctorSelect = (doctorId) => {
   }
 }
 
-const batchDeleteDoctors = () => {
+const batchDeleteDoctors = async () => {
   if (selectedDoctors.value.length === 0) {
     ElMessage.warning('请先选择要删除的医生')
     return
   }
   
-  ElMessageBox.confirm(
-    `确定要删除选中的 ${selectedDoctors.value.length} 位医生吗？此操作不可恢复。`,
-    '批量删除确认',
-    {
-      confirmButtonText: '确定删除',
-      cancelButtonText: '取消',
-      type: 'warning',
-      confirmButtonClass: 'el-button--danger'
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除选中的 ${selectedDoctors.value.length} 位医生吗？此操作不可恢复。`,
+      '批量删除确认',
+      {
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+        confirmButtonClass: 'el-button--danger'
+      }
+    )
+    
+    console.log('🗑️ 开始批量删除医生:', selectedDoctors.value)
+    
+    const response = await deleteDoctor(selectedDoctors.value)
+    console.log('✅ 批量删除医生响应:', response)
+    
+    if (response && response.code === 200) {
+      const deletedCount = selectedDoctors.value.length
+      selectedDoctors.value = []
+      
+      ElNotification({
+        title: '批量删除成功',
+        message: response.msg || `已删除 ${deletedCount} 位医生`,
+        type: 'success'
+      })
+      
+      // 重新获取医生列表
+      await fetchDoctors()
+    } else {
+      ElMessage.error(response?.msg || '批量删除医生失败')
     }
-  ).then(() => {
-    const deletedCount = selectedDoctors.value.length
-    
-    // 删除选中的医生
-    doctorList.value = doctorList.value.filter(d => !selectedDoctors.value.includes(d.id))
-    selectedDoctors.value = []
-    
-    ElNotification({
-      title: '批量删除成功',
-      message: `已删除 ${deletedCount} 位医生`,
-      type: 'success'
-    })
-    
-    // 调整页码
-    if (paginatedDoctors.value.length === 0 && currentPage.value > 1) {
-      currentPage.value = 1
+  } catch (error) {
+    if (error === 'cancel') {
+      ElMessage.info('已取消批量删除')
+    } else {
+      console.error('❌ 批量删除医生失败:', error)
+      ElMessage.error(`批量删除医生失败: ${error.message || '网络错误'}`)
     }
-  }).catch(() => {
-    ElMessage.info('已取消删除')
-  })
+  }
 }
 
 // 生命周期
-onMounted(() => {
+onMounted(async () => {
   document.addEventListener('click', () => (dropdownVisible.value = false))
+  await fetchDoctors()
 })
 
 onUnmounted(() => {
@@ -1593,6 +2044,199 @@ $border: #ebeef5;
     .doctor-table {
       th, td {
         padding: 8px;
+      }
+    }
+  }
+}
+
+// 分页组件样式
+.pagination-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+  
+  :deep(.el-pagination) {
+    .el-pagination__total {
+      color: #666;
+      font-weight: 500;
+    }
+    
+    .el-pagination__sizes {
+      .el-select {
+        .el-input {
+          .el-input__wrapper {
+            border-radius: 8px;
+          }
+        }
+      }
+    }
+    
+    .btn-prev, .btn-next {
+      border-radius: 8px;
+      border: 1px solid #dcdfe6;
+      
+      &:hover {
+        color: $primary;
+        border-color: $primary;
+      }
+    }
+    
+    .el-pager {
+      .number {
+        border-radius: 8px;
+        border: 1px solid transparent;
+        
+        &:hover {
+          color: $primary;
+          border-color: $primary;
+        }
+        
+        &.is-active {
+          background: $primary;
+          border-color: $primary;
+          color: white;
+        }
+      }
+    }
+    
+    .el-pagination__jump {
+      .el-input {
+        .el-input__wrapper {
+          border-radius: 8px;
+        }
+      }
+    }
+  }
+}
+
+// 医生详情弹窗样式
+.detail-modal {
+  max-width: 800px;
+  
+  .detail-content {
+    .detail-section {
+      margin-bottom: 24px;
+      
+      h4 {
+        margin: 0 0 16px 0;
+        font-size: 16px;
+        color: $text;
+        font-weight: 600;
+        padding-bottom: 8px;
+        border-bottom: 2px solid $border;
+      }
+      
+      .detail-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 16px;
+        
+        .detail-item {
+          display: flex;
+          align-items: center;
+          padding: 12px;
+          background: $light;
+          border-radius: 8px;
+          
+          label {
+            font-weight: 500;
+            color: #666;
+            min-width: 100px;
+            margin-right: 12px;
+          }
+          
+          span {
+            color: $text;
+            font-weight: 500;
+            
+            &.work-id {
+              font-family: 'Courier New', monospace;
+              color: $primary;
+              font-weight: 600;
+            }
+          }
+          
+          .title-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+
+            &.senior {
+              background: rgba($danger, 0.1);
+              color: $danger;
+            }
+
+            &.associate {
+              background: rgba($warning, 0.1);
+              color: $warning;
+            }
+
+            &.attending {
+              background: rgba($success, 0.1);
+              color: $success;
+            }
+
+            &.resident {
+              background: rgba($primary, 0.1);
+              color: $primary;
+            }
+          }
+          
+          .status-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+
+            &.active { 
+              background: rgba($success, 0.1); 
+              color: $success; 
+            }
+            &.vacation { 
+              background: rgba($warning, 0.1); 
+              color: $warning; 
+            }
+            &.suspended { 
+              background: rgba($danger, 0.1); 
+              color: $danger; 
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  .no-data {
+    text-align: center;
+    padding: 40px;
+    color: #999;
+    
+    p {
+      margin: 0;
+      font-size: 14px;
+    }
+  }
+}
+
+// 响应式适配详情弹窗
+@media (max-width: 768px) {
+  .detail-modal {
+    max-width: 95%;
+    
+    .detail-grid {
+      grid-template-columns: 1fr !important;
+      
+      .detail-item {
+        flex-direction: column;
+        align-items: flex-start;
+        
+        label {
+          min-width: auto;
+          margin-right: 0;
+          margin-bottom: 4px;
+        }
       }
     }
   }
