@@ -1,166 +1,259 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
-import HomeView from '../views/doctor/HomeView.vue'
+import DoctorDashboard from '@/views/doctor/DashboardView.vue'
+import ManagerDashboard from '@/views/manager/DashboardView.vue'
+import NurseDashboard from '@/views/nurse/DashboardView.vue'
 
 const routes = [
+  // 根路径，根据用户角色重定向到对应首页
   {
     path: '/',
-    name: 'home',
-    meta: {
-      title: "主页"
-    },
-    component: HomeView
+    name: 'redirect',
+    redirect: (to) => {
+      // 根据用户角色重定向到对应首页
+      const user = JSON.parse(localStorage.getItem('user') || 'null')
+      if (!user) return '/login'
+
+      switch (user.role) {
+        case 'doctor':
+          return '/doctor/home'
+        case 'manager':
+          return '/manager/home'
+        case 'nurse':
+          return '/nurse/home'
+        default:
+          return '/login'
+      }
+    }
   },
+  // 医生页面
   {
-    path: '/tts',
-    name: 'tts',
+    path: '/doctor',
+    name: 'doctor',
     meta: {
-      title: "语音合成"
+      title: "医生工作台",
+      requiresAuth: true,
+      requiredRole: 'doctor'
     },
-    component: () => import(/* webpackChunkName: "about" */ '@/views/TTSView.vue')
+    component: DoctorDashboard,
+    redirect: '/doctor/home',
+    children: [
+      // 医生工作台
+      {
+        path: 'home',
+        name: 'DoctorHome',
+        meta: {
+          title: "医生工作台"
+        },
+        component: () => import('@/views/doctor/HomeView.vue')
+      },
+      // 患者管理
+      {
+        path: 'patient',
+        name: 'DoctorPatientManager',
+        meta: {
+          title: "患者管理"
+        },
+        component: () => import('@/views/doctor/PatientManagerView.vue')
+      },
+      // 病历管理
+      {
+        path: 'medicalrecord',
+        name: 'DoctorMedicalRecordManager',
+        meta: {
+          title: "病历管理"
+        },
+        component: () => import('@/views/doctor/BingLiManagerView.vue')
+      },
+      // 预约管理
+      {
+        path: 'reservation',
+        name: 'DoctorReservationManager',
+        meta: {
+          title: "预约管理"
+        },
+        component: () => import('@/views/doctor/YuYueManagerView.vue')
+      },
+      // 工作统计
+      {
+        path: 'statistics',
+        name: 'DoctorWorkStatistics',
+        meta: {
+          title: "工作统计"
+        },
+        component: () => import('@/views/doctor/WorkStatisticsView.vue')
+      }
+    ]
   },
-  {
-    path: '/patientmanager',
-    name: 'patientmanager',
-    meta: {
-      title: "患者管理"
-    },
-    component: () => import(/* webpackChunkName: "about" */ '@/views/doctor/PatientManagerView.vue')
-  },
-  {
-    path: '/binglimanager',
-    name: 'binglimanager',
-    meta: {
-      title: "病例管理"
-    },
-    component: () => import(/* webpackChunkName: "about" */ '@/views/doctor/BingLiManagerView.vue')
-  },
-  {
-    path: '/yuyuemanager',
-    name: 'yuyuemanager',
-    meta: {
-      title: "预约管理"
-    },
-    component: () => import(/* webpackChunkName: "about" */ '@/views/doctor/YuYueManagerView.vue')
-  },
-  {
-    path: '/workstatistic',
-    name: 'workstatistic',
-    meta: {
-      title: "工作统计"
-    },
-    component: () => import(/* webpackChunkName: "about" */ '@/views/doctor/WorkStatisticsView.vue')
-  },
+  // 管理员页面
   {
     path: '/manager',
     name: 'manager',
     meta: {
-      title: "管理员首页"
+      title: "管理员首页",
+      requiresAuth: true,
+      requiredRole: 'manager'
     },
-    component: () => import(/* webpackChunkName: "about" */ '@/views/manager/ManagerMainView.vue')
+    component: ManagerDashboard,
+    redirect: '/manager/home',
+    children: [
+      // 管理员工作台
+      {
+        path: 'home',
+        name: 'ManagerHome',
+        meta: {
+          title: "管理员工作台"
+        },
+        component: () => import('@/views/manager/ManagerMainView.vue')
+      },
+      // 科室管理
+      {
+        path: 'department',
+        name: 'ManagerDepartmentManager',
+        meta: {
+          title: "科室管理"
+        },
+        component: () => import('@/views/manager/DepartmentManagerView.vue')
+      },
+      // 诊室管理
+      {
+        path: 'clinicroom',
+        name: 'ManagerClinicRoomManager',
+        meta: {
+          title: "诊室管理"
+        },
+        component: () => import('@/views/manager/ClinicRoomManagerView.vue')
+      },
+      // 医生管理
+      {
+        path: 'doctor',
+        name: 'ManagerDoctorManager',
+        meta: {
+          title: "医生管理"
+        },
+        component: () => import('@/views/manager/DoctorManagerView.vue')
+      },
+      // 护士管理
+      {
+        path: 'nurse',
+        name: 'ManagerNurseManager',
+        meta: {
+          title: "护士管理"
+        },
+        component: () => import('@/views/manager/NurseManagerView.vue')
+      },
+      // 患者管理
+      {
+        path: 'patient',
+        name: 'ManagerPatientManager',
+        meta: {
+          title: "患者管理"
+        },
+        component: () => import('@/views/manager/PatientManagerView.vue')
+      },
+      // 预约管理
+      {
+        path: 'reservation',
+        name: 'ManagerReservationManager',
+        meta: {
+          title: "预约管理"
+        },
+        component: () => import('@/views/manager/YuYueManagerView.vue')
+      },
+      // 门诊日程
+      {
+        path: 'schedule',
+        name: 'ManagerSchedule',
+        meta: {
+          title: "门诊日程"
+        },
+        component: () => import('@/views/manager/ScheduleView.vue')
+      },
+      // 出诊管理
+      {
+        path: 'outpatient',
+        name: 'ManagerOutpatientManager',
+        meta: {
+          title: "出诊管理"
+        },
+        component: () => import('@/views/manager/OutpatientManagerView.vue')
+      },
+      // 窗口挂号
+      {
+        path: 'registration',
+        name: 'ManagerRegistration',
+        meta: {
+          title: "窗口挂号"
+        },
+        component: () => import('@/views/manager/RegistrationWindowView.vue')
+      },
+      // 系统设置
+      {
+        path: 'settings',
+        name: 'ManagerSettings',
+        meta: {
+          title: "系统设置"
+        },
+        component: () => import('@/views/manager/SettingsView.vue')
+      }
+    ]
   },
+  // 护士页面
   {
-    path: '/departmentmanager',
-    name: 'departmentmanager',
+    path: '/nurse',
+    name: 'nurse',
     meta: {
-      title: "科室管理"
+      title: "护士首页",
+      requiresAuth: true,
+      requiredRole: 'nurse'
     },
-    component: () => import(/* webpackChunkName: "about" */ '@/views/manager/DepartmentManagerView.vue')
+    component: NurseDashboard,
+    redirect: '/nurse/home',
+    children: [
+      // 护士工作台
+      {
+        path: 'home',
+        name: 'NurseHome',
+        meta: {
+          title: "护士工作台"
+        },
+        component: () => import('@/views/nurse/NurseHomeView.vue')
+      },
+      // 患者护理
+      {
+        path: 'patientcare',
+        name: 'NursePatientCare',
+        meta: {
+          title: "患者护理"
+        },
+        component: () => import('@/views/nurse/PatientCareView.vue')
+      }
+    ]
   },
+  // 语音合成测试页面（开发用）
   {
-    path: '/clinicroommanager',
-    name: 'clinicroommanager',
+    path: '/tts',
+    name: 'tts',
     meta: {
-      title: "诊室管理"
+      title: "语音合成",
+      requiresAuth: false
     },
-    component: () => import(/* webpackChunkName: "about" */ '@/views/manager/ClinicRoomManagerView.vue')
+    component: () => import('@/views/TTSView.vue')
   },
+  // 登录页面
   {
-    path: '/doctormanager',
-    name: 'doctormanager',
-    meta: {
-      title: "医生管理"
-    },
-    component: () => import(/* webpackChunkName: "about" */ '@/views/manager/DoctorManagerView.vue')
-  },
-  {
-    path: '/nursemanager',
-    name: 'nursemanager',
-    meta: {
-      title: "护士管理"
-    },
-    component: () => import(/* webpackChunkName: "about" */ '@/views/manager/NurseManagerView.vue')
-  },
-  {
-    path: '/mpatientmanager',
-    name: 'ManagerPatientManager',
-    meta: {
-      title: "患者管理"
-    },
-    component: () => import(/* webpackChunkName: "about" */ '@/views/manager/PatientManagerView.vue')
-  },
-  {
-    path: '/myuyuemanager',
-    name: 'ManagerYuYueManager',
-    meta: {
-      title: "预约管理"
-    },
-    component: () => import(/* webpackChunkName: "about" */ '@/views/manager/YuYueManagerView.vue')
-  },
-  {
-    path: '/schedule',
-    name: 'schedule',
-    meta: {
-      title: "门诊日程"
-    },
-    component: () => import(/* webpackChunkName: "about" */ '@/views/manager/ScheduleView.vue')
-  },
-  {
-    path: '/outpatientmanager',
-    name: 'outpatientmanager',
-    meta: {
-      title: "出诊管理"
-    },
-    component: () => import(/* webpackChunkName: "about" */ '@/views/manager/OutpatientManagerView.vue')
-  },
-  {
-    path: '/settings',
-    name: 'settings',
-    meta: {
-      title: "系统设置"
-    },
-    component: () => import(/* webpackChunkName: "about" */ '@/views/manager/SettingsView.vue')
-  },
-  {
-    path: '/registration',
-    name: 'registration',
-    meta: {
-      title: "窗口挂号"
-    },
-    component: () => import(/* webpackChunkName: "about" */ '@/views/manager/RegistrationWindowView.vue')
-  },
-  {
-    path: '/nursehome',
-    name: 'nursehome',
-    meta: {
-      title: "护士首页"
-    },
-    component: () => import(/* webpackChunkName: "about" */ '@/views/nurse/NurseHomeView.vue')
-  },
-  {
-    path: '/patientcare',
-    name: 'patientcare',
-    meta: {
-      title: "患者护理"
-    },
-    component: () => import(/* webpackChunkName: "about" */ '@/views/nurse/PatientCareView.vue')
-  },
-    {
     path: '/login',
     name: 'login',
     meta: {
-      title: "登录"
+      title: "登录",
+      requiresAuth: false
     },
-    component: () => import(/* webpackChunkName: "about" */ '@/views/LoginView.vue')
+    component: () => import('@/views/LoginView.vue')
+  },
+  // 其他未匹配到的路径重定向到登录页
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'not-found',
+    redirect: '/login'
   }
 ]
 
@@ -171,19 +264,42 @@ const router = createRouter({
 
 // 全局路由守卫
 router.beforeEach((to, from, next) => {
-  //获取vuex中的token和用户信息
-  const token = localStorage.getItem("token");
-  const user = JSON.parse(localStorage.getItem('user'));
-  // 判断token存在或者访问的是登录页
-  if (token != null || to.path === "/login") {
+  const token = localStorage.getItem("token")
+  const user = JSON.parse(localStorage.getItem('user') || 'null')
+  
+  // 不需要认证的页面直接放行
+  if (!to.meta.requiresAuth) {
     next()
-  }else{
-    if(user==null){
-      next('/login');
-    }else{
-      next();
-    }
+    return
   }
+  
+  // 检查是否登录
+  if (!token || !user) {
+    next('/login')
+    return
+  }
+  
+  // 检查角色权限
+  const requiredRole = to.meta.requiredRole
+  if (requiredRole && user.role !== requiredRole) {
+    // 角色不匹配，重定向到对应角色的首页
+    switch (user.role) {
+      case 'doctor':
+        next('/doctor/home')
+        break
+      case 'manager':
+        next('/manager/home')
+        break
+      case 'nurse':
+        next('/nurse/home')
+        break
+      default:
+        next('/login')
+    }
+    return
+  }
+  
+  next()
 })
 
 export default router

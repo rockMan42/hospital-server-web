@@ -19,6 +19,19 @@ export default createStore({
     setUser(state,user){
       state.user = user;
       localStorage.setItem('user',JSON.stringify(user))
+    },
+    //设置登录信息（包含role和user信息）
+    setLoginData(state, loginData) {
+      // loginData 包含 { role, user, token }
+      state.Authorization = loginData.token;
+      // 将role信息合并到用户信息中
+      const userWithRole = {
+        ...loginData.user,
+        role: loginData.role
+      };
+      state.user = userWithRole;
+      localStorage.setItem('token', loginData.token);
+      localStorage.setItem('user', JSON.stringify(userWithRole));
     }
   },
   actions: {

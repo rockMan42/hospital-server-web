@@ -18,4 +18,4 @@ export const doMothed = (form) => http.post('url',form);
  * 用户管理模块
  */
 //用户登录
-export const loginUser = (form) => http.post('http://localhost:8081/user/validateUser',form);
+export const loginUser = (form) => http.post('http://localhost:8081/user/login',form);

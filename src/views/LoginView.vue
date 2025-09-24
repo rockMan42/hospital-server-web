@@ -208,10 +208,30 @@ const handleLogin = async () => {
       password: loginForm.password,
       rememberMe: rememberMe.value
     })
-    store.commit('login', response.data.token)
-    store.commit('setUser', response.data.user)
+    
+    // 使用新的setLoginData mutation来存储完整的登录信息
+    store.commit('setLoginData', {
+      role: response.data.role,
+      user: response.data.user,
+      token: response.data.token
+    })
+    
     ElMessage({ message: response.msg, type: 'success' })
-    router.push({ name: 'home' })
+    
+    // 根据角色重定向到对应的首页
+    switch (response.data.role) {
+      case 'doctor':
+        router.push('/doctor/home')
+        break
+      case 'manager':
+        router.push('/manager/home')
+        break
+      case 'nurse':
+        router.push('/nurse/home')
+        break
+      default:
+        router.push('/')
+    }
   } catch (error) {
     console.error('登录失败:', error)
     ElMessage.error('登录失败，请检查用户名或密码')
