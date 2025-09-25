@@ -42,7 +42,9 @@ const routes = [
         path: 'home',
         name: 'DoctorHome',
         meta: {
-          title: "医生工作台"
+          title: "医生工作台",
+          requiresAuth: true,
+          requiredRole: 'doctor'
         },
         component: () => import('@/views/doctor/HomeView.vue')
       },
@@ -51,7 +53,9 @@ const routes = [
         path: 'patient',
         name: 'DoctorPatientManager',
         meta: {
-          title: "患者管理"
+          title: "患者管理",
+          requiresAuth: true,
+          requiredRole: 'doctor'
         },
         component: () => import('@/views/doctor/PatientManagerView.vue')
       },
@@ -60,7 +64,9 @@ const routes = [
         path: 'medicalrecord',
         name: 'DoctorMedicalRecordManager',
         meta: {
-          title: "病历管理"
+          title: "病历管理",
+          requiresAuth: true,
+          requiredRole: 'doctor'
         },
         component: () => import('@/views/doctor/BingLiManagerView.vue')
       },
@@ -69,7 +75,9 @@ const routes = [
         path: 'reservation',
         name: 'DoctorReservationManager',
         meta: {
-          title: "预约管理"
+          title: "预约管理",
+          requiresAuth: true,
+          requiredRole: 'doctor'
         },
         component: () => import('@/views/doctor/YuYueManagerView.vue')
       },
@@ -78,7 +86,9 @@ const routes = [
         path: 'statistics',
         name: 'DoctorWorkStatistics',
         meta: {
-          title: "工作统计"
+          title: "工作统计",
+          requiresAuth: true,
+          requiredRole: 'doctor'
         },
         component: () => import('@/views/doctor/WorkStatisticsView.vue')
       }
@@ -101,7 +111,9 @@ const routes = [
         path: 'home',
         name: 'ManagerHome',
         meta: {
-          title: "管理员工作台"
+          title: "管理员工作台",
+          requiresAuth: true,
+          requiredRole: 'manager'
         },
         component: () => import('@/views/manager/ManagerMainView.vue')
       },
@@ -110,7 +122,9 @@ const routes = [
         path: 'department',
         name: 'ManagerDepartmentManager',
         meta: {
-          title: "科室管理"
+          title: "科室管理",
+          requiresAuth: true,
+          requiredRole: 'manager'
         },
         component: () => import('@/views/manager/DepartmentManagerView.vue')
       },
@@ -119,7 +133,9 @@ const routes = [
         path: 'clinicroom',
         name: 'ManagerClinicRoomManager',
         meta: {
-          title: "诊室管理"
+          title: "诊室管理",
+          requiresAuth: true,
+          requiredRole: 'manager'
         },
         component: () => import('@/views/manager/ClinicRoomManagerView.vue')
       },
@@ -128,7 +144,9 @@ const routes = [
         path: 'doctor',
         name: 'ManagerDoctorManager',
         meta: {
-          title: "医生管理"
+          title: "医生管理",
+          requiresAuth: true,
+          requiredRole: 'manager'
         },
         component: () => import('@/views/manager/DoctorManagerView.vue')
       },
@@ -137,7 +155,9 @@ const routes = [
         path: 'nurse',
         name: 'ManagerNurseManager',
         meta: {
-          title: "护士管理"
+          title: "护士管理",
+          requiresAuth: true,
+          requiredRole: 'manager'
         },
         component: () => import('@/views/manager/NurseManagerView.vue')
       },
@@ -146,7 +166,9 @@ const routes = [
         path: 'patient',
         name: 'ManagerPatientManager',
         meta: {
-          title: "患者管理"
+          title: "患者管理",
+          requiresAuth: true,
+          requiredRole: 'manager'
         },
         component: () => import('@/views/manager/PatientManagerView.vue')
       },
@@ -155,7 +177,9 @@ const routes = [
         path: 'reservation',
         name: 'ManagerReservationManager',
         meta: {
-          title: "预约管理"
+          title: "预约管理",
+          requiresAuth: true,
+          requiredRole: 'manager'
         },
         component: () => import('@/views/manager/YuYueManagerView.vue')
       },
@@ -164,7 +188,9 @@ const routes = [
         path: 'schedule',
         name: 'ManagerSchedule',
         meta: {
-          title: "门诊日程"
+          title: "门诊日程",
+          requiresAuth: true,
+          requiredRole: 'manager'
         },
         component: () => import('@/views/manager/ScheduleView.vue')
       },
@@ -173,7 +199,9 @@ const routes = [
         path: 'outpatient',
         name: 'ManagerOutpatientManager',
         meta: {
-          title: "出诊管理"
+          title: "出诊管理",
+          requiresAuth: true,
+          requiredRole: 'manager'
         },
         component: () => import('@/views/manager/OutpatientManagerView.vue')
       },
@@ -182,7 +210,9 @@ const routes = [
         path: 'registration',
         name: 'ManagerRegistration',
         meta: {
-          title: "窗口挂号"
+          title: "窗口挂号",
+          requiresAuth: true,
+          requiredRole: 'manager'
         },
         component: () => import('@/views/manager/RegistrationWindowView.vue')
       },
@@ -191,7 +221,9 @@ const routes = [
         path: 'settings',
         name: 'ManagerSettings',
         meta: {
-          title: "系统设置"
+          title: "系统设置",
+          requiresAuth: true,
+          requiredRole: 'manager'
         },
         component: () => import('@/views/manager/SettingsView.vue')
       }
@@ -214,7 +246,9 @@ const routes = [
         path: 'home',
         name: 'NurseHome',
         meta: {
-          title: "护士工作台"
+          title: "护士工作台",
+          requiresAuth: true,
+          requiredRole: 'nurse'
         },
         component: () => import('@/views/nurse/NurseHomeView.vue')
       },
@@ -223,7 +257,9 @@ const routes = [
         path: 'patientcare',
         name: 'NursePatientCare',
         meta: {
-          title: "患者护理"
+          title: "患者护理",
+          requiresAuth: true,
+          requiredRole: 'nurse'
         },
         component: () => import('@/views/nurse/PatientCareView.vue')
       }

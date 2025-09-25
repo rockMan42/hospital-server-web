@@ -77,11 +77,11 @@ const props = defineProps({
 
 // 核心功能菜单项
 const coreMenuItems = ref([
-  { name: '工作台', path: '/', icon: '🏠', key: 'workbench' },
-  { name: '预约管理', path: '/yuyuemanager', icon: '📅', key: 'appointment' },
-  { name: '患者管理', path: '/patientmanager', icon: '👥', key: 'patient' },
-  { name: '病历管理', path: '/binglimanager', icon: '📝', key: 'medical' },
-  { name: '工作统计', path: '/workstatistic', icon: '📊', key: 'statistics' }
+  { name: '工作台', path: '/doctor/home', icon: '🏠', key: 'workbench' },
+  { name: '预约管理', path: '/doctor/reservation', icon: '📅', key: 'appointment' },
+  { name: '患者管理', path: '/doctor/patient', icon: '👥', key: 'patient' },
+  { name: '病历管理', path: '/doctor/medicalrecord', icon: '📝', key: 'medical' },
+  { name: '工作统计', path: '/doctor/statistics', icon: '📊', key: 'statistics' }
 ])
 
 // 系统设置菜单项

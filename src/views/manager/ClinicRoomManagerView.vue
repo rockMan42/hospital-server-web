@@ -11,7 +11,7 @@
 
     <!-- 主体布局 -->
     <div class="main-layout">
-      <!-- 左侧菜单 - 使用SideLeft组件 -->
+      <!-- 左侧菜单 -->
       <SideLeft :activeMenu="'clinicroom'" />
 
       <!-- 主内容区 -->
@@ -21,7 +21,7 @@
           <p>管理和维护医院所有诊室信息</p>
         </div>
 
-        <!-- 数据卡片 -->
+        <!-- 统计卡片 -->
         <div class="stats-cards">
           <div class="card">
             <div class="card-icon bg-blue">🚪</div>
@@ -84,7 +84,7 @@
           </button>
         </div>
 
-        <!-- 搜索和筛选 -->
+        <!-- 搜索筛选 -->
         <div class="search-filter-section">
           <div class="search-bars">
             <div class="search-input-wrapper">
@@ -98,6 +98,16 @@
               />
             </div>
             <div class="search-input-wrapper">
+              <span class="search-icon">🏷️</span>
+              <input 
+                type="text" 
+                class="search-input" 
+                placeholder="按诊室编号搜索..."
+                v-model="searchByRoomNumber"
+                @input="handleSearch"
+              />
+            </div>
+            <div class="search-input-wrapper">
               <span class="search-icon">🏥</span>
               <input 
                 type="text" 
@@ -107,40 +117,24 @@
                 @input="handleSearch"
               />
             </div>
-            <div class="search-input-wrapper">
-              <span class="search-icon">🔢</span>
-              <input 
-                type="text" 
-                class="search-input" 
-                placeholder="按诊室编号搜索..."
-                v-model="searchByRoomNumber"
-                @input="handleSearch"
-              />
-            </div>
           </div>
           
           <div class="filter-controls">
-            <select class="filter-select" v-model="selectedStatus" @change="handleFilter">
+            <select 
+              class="filter-select" 
+              v-model="selectedStatus"
+              @change="handleSearch"
+            >
               <option value="">全部状态</option>
-              <option value="available">可用</option>
-              <option value="occupied">使用中</option>
-              <option value="maintenance">维护中</option>
-              <option value="disabled">停用</option>
+              <option value="可用">可用</option>
+              <option value="使用中">使用中</option>
+              <option value="维护中">维护中</option>
+              <option value="停用">停用</option>
             </select>
             
-            <select class="filter-select" v-model="selectedType" @change="handleFilter">
-              <option value="">全部类型</option>
-              <option value="consultation">普通诊室</option>
-              <option value="examination">检查室</option>
-              <option value="treatment">治疗室</option>
-              <option value="surgery">手术室</option>
-              <option value="emergency">急诊室</option>
-            </select>
-
-            <button class="clear-search-btn" @click="clearAllSearch">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
+            <button class="clear-search-btn" @click="clearSearch">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
               </svg>
               清空搜索
             </button>
@@ -152,13 +146,15 @@
           <div class="list-header">
             <h2>诊室列表</h2>
             <div class="list-info">
-              共 {{ filteredRooms.length }} 个诊室
+              <span v-if="loading">加载中...</span>
+              <span v-else>共 {{ totalCount }} 个诊室</span>
               <span v-if="selectedRooms.length > 0" class="selected-info">
                 (已选择 {{ selectedRooms.length }} 个)
               </span>
             </div>
           </div>
 
+          <!-- 表格 -->
           <div class="room-table-wrapper">
             <table class="room-table">
               <thead>
@@ -174,27 +170,23 @@
                   <th>诊室编号</th>
                   <th>诊室名称</th>
                   <th>所属科室</th>
-                  <th>诊室类型</th>
-                  <th>楼层位置</th>
-                  <th>设备状态</th>
+                  <th>位置信息</th>
                   <th>当前状态</th>
-                  <th>负责医生</th>
                   <th>操作</th>
                 </tr>
               </thead>
               <tbody>
                 <tr 
                   v-for="room in paginatedRooms" 
-                  :key="room.id"
+                  :key="room.id" 
                   class="table-row"
-                  @click="selectRoom(room.id)"
+                  @click="handleRoomRowClick(room)"
                 >
-                  <td>
+                  <td @click.stop>
                     <input 
                       type="checkbox" 
                       class="select-checkbox"
                       :checked="selectedRooms.includes(room.id)"
-                      @click.stop
                       @change="toggleRoomSelection(room.id)"
                     />
                   </td>
@@ -203,56 +195,49 @@
                   </td>
                   <td>
                     <div class="room-name-cell">
-                      <div class="room-icon">{{ getRoomTypeIcon(room.type) }}</div>
+                      <div class="room-icon">🏥</div>
                       <div>
                         <div class="room-name">{{ room.name }}</div>
-                        <div class="room-meta">{{ room.area }}㎡</div>
+                        <div class="room-meta">诊室ID: {{ room.id }}</div>
                       </div>
                     </div>
                   </td>
                   <td>
                     <div class="department-info">
-                      <div class="department-name">{{ room.department }}</div>
+                      <div class="department-name">{{ room.departmentName || departmentMap[room.departmentId] || '未知科室' }}</div>
                     </div>
-                  </td>
-                  <td>
-                    <span class="type-badge" :class="room.type">
-                      {{ getRoomTypeName(room.type) }}
-                    </span>
                   </td>
                   <td>
                     <div class="location-info">
-                      <div class="floor">{{ room.floor }}楼</div>
-                      <div class="position">{{ room.position }}</div>
+                      <div class="location">{{ room.location || '未设置' }}</div>
                     </div>
                   </td>
                   <td>
-                    <span class="equipment-badge" :class="room.equipmentStatus">
-                      {{ getEquipmentStatusName(room.equipmentStatus) }}
-                    </span>
-                  </td>
-                  <td>
-                    <span class="status-badge" :class="room.status">
+                    <span class="status-badge" :class="getStatusClass(room.status)">
                       {{ getStatusName(room.status) }}
                     </span>
                   </td>
-                  <td>
-                    <div class="doctor-info">
-                      <div class="doctor-name">{{ room.responsibleDoctor || '未分配' }}</div>
-                    </div>
-                  </td>
-                  <td>
+                  <td @click.stop>
                     <div class="table-actions">
-                      <button class="action-btn-mini view" @click.stop="viewRoom(room)" title="查看详情">
+                      <button 
+                        class="action-btn-mini view" 
+                        @click="handleViewDetail(room)"
+                        title="查看详情"
+                      >
                         👁️
                       </button>
-                      <button class="action-btn-mini edit" @click.stop="editRoom(room)" title="编辑">
+                      <button 
+                        class="action-btn-mini edit" 
+                        @click="editRoom(room)"
+                        title="编辑"
+                      >
                         ✏️
                       </button>
-                      <button class="action-btn-mini schedule" @click.stop="manageSchedule(room)" title="排班管理">
-                        📅
-                      </button>
-                      <button class="action-btn-mini delete" @click.stop="deleteRoom(room)" title="删除">
+                      <button 
+                        class="action-btn-mini delete" 
+                        @click="deleteRoom(room.id)"
+                        title="删除"
+                      >
                         🗑️
                       </button>
                     </div>
@@ -263,40 +248,25 @@
           </div>
 
           <!-- 分页 -->
-          <div class="pagination">
-            <button 
-              class="page-btn" 
-              :disabled="currentPage === 1"
-              @click="currentPage--"
-            >
-              上一页
-            </button>
-            
-            <div class="page-numbers">
-              <button 
-                v-for="page in visiblePages" 
-                :key="page"
-                class="page-number"
-                :class="{ active: page === currentPage }"
-                @click="currentPage = page"
-              >
-                {{ page }}
-              </button>
-            </div>
-            
-            <button 
-              class="page-btn" 
-              :disabled="currentPage === totalPages"
-              @click="currentPage++"
-            >
-              下一页
-            </button>
+          <div class="pagination-wrapper">
+            <el-pagination
+              v-model:current-page="currentPage"
+              v-model:page-size="pageSize"
+              :page-sizes="[5, 10, 20, 50]"
+              :small="false"
+              :disabled="loading"
+              :background="true"
+              layout="total, sizes, prev, pager, next, jumper"
+              :total="totalCount"
+              @size-change="handleSizeChange"
+              @current-change="handleCurrentChange"
+            />
           </div>
         </div>
       </main>
     </div>
 
-    <!-- 新增/编辑诊室弹窗 -->
+    <!-- 新增/编辑弹窗 -->
     <div v-if="showAddModal || showEditModal" class="modal-overlay" @click="closeModal">
       <div class="modal-content" @click.stop>
         <div class="modal-header">
@@ -307,59 +277,113 @@
           <div class="form-grid">
             <div class="form-group">
               <label>诊室编号 <span class="required">*</span></label>
-              <input type="text" v-model="roomForm.roomNumber" placeholder="请输入诊室编号" />
+              <input 
+                type="text" 
+                v-model="roomForm.roomNumber" 
+                placeholder="请输入诊室编号"
+                required
+              />
             </div>
             <div class="form-group">
               <label>诊室名称 <span class="required">*</span></label>
-              <input type="text" v-model="roomForm.name" placeholder="请输入诊室名称" />
+              <input 
+                type="text" 
+                v-model="roomForm.name" 
+                placeholder="请输入诊室名称"
+                required
+              />
             </div>
             <div class="form-group">
               <label>所属科室 <span class="required">*</span></label>
-              <select v-model="roomForm.department">
+              <select v-model="roomForm.department" required>
                 <option value="">请选择科室</option>
-                <option value="心血管内科">心血管内科</option>
-                <option value="骨科">骨科</option>
-                <option value="妇产科">妇产科</option>
+                <option value="内科">内科</option>
+                <option value="外科">外科</option>
                 <option value="儿科">儿科</option>
+                <option value="妇产科">妇产科</option>
                 <option value="急诊科">急诊科</option>
+                <option value="眼科">眼科</option>
+                <option value="耳鼻喉科">耳鼻喉科</option>
+                <option value="皮肤科">皮肤科</option>
+                <option value="口腔科">口腔科</option>
+                <option value="中医科">中医科</option>
+                <option value="康复科">康复科</option>
               </select>
             </div>
             <div class="form-group">
-              <label>诊室类型 <span class="required">*</span></label>
-              <select v-model="roomForm.type">
-                <option value="">请选择类型</option>
-                <option value="consultation">普通诊室</option>
-                <option value="examination">检查室</option>
-                <option value="treatment">治疗室</option>
-                <option value="surgery">手术室</option>
-                <option value="emergency">急诊室</option>
+              <label>位置信息</label>
+              <input 
+                type="text" 
+                v-model="roomForm.location" 
+                placeholder="请输入位置信息"
+              />
+            </div>
+            <div class="form-group">
+              <label>诊室状态</label>
+              <select v-model="roomForm.status">
+                <option value="0">可用</option>
+                <option value="1">使用中</option>
+                <option value="2">维护中</option>
+                <option value="3">停用</option>
               </select>
-            </div>
-            <div class="form-group">
-              <label>楼层</label>
-              <input type="number" v-model="roomForm.floor" placeholder="请输入楼层" />
-            </div>
-            <div class="form-group">
-              <label>位置</label>
-              <input type="text" v-model="roomForm.position" placeholder="请输入具体位置" />
-            </div>
-            <div class="form-group">
-              <label>面积(㎡)</label>
-              <input type="number" v-model="roomForm.area" placeholder="请输入面积" />
-            </div>
-            <div class="form-group">
-              <label>负责医生</label>
-              <input type="text" v-model="roomForm.responsibleDoctor" placeholder="请输入负责医生" />
-            </div>
-            <div class="form-group full-width">
-              <label>备注</label>
-              <textarea v-model="roomForm.description" placeholder="请输入备注信息"></textarea>
             </div>
           </div>
         </div>
         <div class="modal-footer">
           <button class="action-btn outline" @click="closeModal">取消</button>
-          <button class="action-btn primary" @click="saveRoom">保存</button>
+          <button class="action-btn primary" @click="saveRoom">
+            {{ showAddModal ? '添加诊室' : '保存修改' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 详情弹窗 -->
+    <div v-if="showDetailModal" class="modal-overlay" @click="closeDetailModal">
+      <div class="modal-content detail-modal" @click.stop>
+        <div class="modal-header">
+          <h3>诊室详情</h3>
+          <button class="close-btn" @click="closeDetailModal">×</button>
+        </div>
+        <div class="modal-body">
+          <div v-if="detailLoading" class="loading-container">
+            <div class="loading-spinner"></div>
+            <p>正在加载诊室详情...</p>
+          </div>
+          <div v-else class="detail-grid">
+            <div class="detail-item">
+              <label>诊室ID</label>
+              <span class="detail-value">{{ roomDetail.id }}</span>
+            </div>
+            <div class="detail-item">
+              <label>诊室编号</label>
+              <span class="detail-value room-number">{{ roomDetail.roomNumber }}</span>
+            </div>
+            <div class="detail-item">
+              <label>诊室名称</label>
+              <span class="detail-value room-name">{{ roomDetail.name }}</span>
+            </div>
+            <div class="detail-item">
+              <label>所属科室</label>
+              <span class="detail-value department">{{ roomDetail.departmentName }}</span>
+            </div>
+            <div class="detail-item">
+              <label>位置信息</label>
+              <span class="detail-value location">{{ roomDetail.location || '未设置' }}</span>
+            </div>
+            <div class="detail-item">
+              <label>当前状态</label>
+              <span class="detail-value">
+                <span class="status-badge" :class="getStatusClass(roomDetail.status)">
+                  {{ getStatusName(roomDetail.status) }}
+                </span>
+              </span>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="action-btn outline" @click="closeDetailModal">关闭</button>
+          <button class="action-btn primary" @click="editRoomFromDetail">编辑诊室</button>
         </div>
       </div>
     </div>
@@ -367,27 +391,31 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 import { ElNotification, ElMessage, ElMessageBox } from 'element-plus'
 import SideLeft from '@/components/manager/SideLeft.vue'
 import AdminHeader from '@/components/manager/AdminHeader.vue'
+import { getClinicRoomPageList, getClinicRoomDetail, createClinicRoom, updateClinicRoom, deleteClinicRoom } from '@/api/clinicRooms'
 
 // 状态管理
 const searchByName = ref('')
-const searchByDepartment = ref('')
 const searchByRoomNumber = ref('')
+const searchByDepartment = ref('')
 const selectedStatus = ref('')
-const selectedType = ref('')
-const currentPage = ref(1)
-const pageSize = 10
+const loading = ref(false)
+const rooms = ref([])
 const selectedRooms = ref([])
 const showAddModal = ref(false)
 const showEditModal = ref(false)
-const editingRoom = ref(null)
+const showDetailModal = ref(false)
+const detailLoading = ref(false)
+const roomDetail = ref({})
+const currentPage = ref(1)
+const pageSize = ref(10)
+const totalCount = ref(0)
 
-// 路由和状态
 const router = useRouter()
 const store = useStore()
 
@@ -396,144 +424,51 @@ const roomForm = ref({
   roomNumber: '',
   name: '',
   department: '',
-  type: '',
-  floor: '',
-  position: '',
-  area: '',
-  responsibleDoctor: '',
+  location: '',
+  status: '0',
   description: ''
 })
 
-// 模拟诊室数据
-const rooms = ref([
-  {
-    id: 1,
-    roomNumber: 'R001',
-    name: '心血管诊室1',
-    department: '心血管内科',
-    type: 'consultation',
-    floor: 3,
-    position: '东侧',
-    area: 25,
-    equipmentStatus: 'normal',
-    status: 'available',
-    responsibleDoctor: '张主任'
-  },
-  {
-    id: 2,
-    roomNumber: 'R002',
-    name: '骨科检查室',
-    department: '骨科',
-    type: 'examination',
-    floor: 5,
-    position: '西侧',
-    area: 30,
-    equipmentStatus: 'normal',
-    status: 'occupied',
-    responsibleDoctor: '李医生'
-  },
-  {
-    id: 3,
-    roomNumber: 'R003',
-    name: '妇产科治疗室',
-    department: '妇产科',
-    type: 'treatment',
-    floor: 4,
-    position: '南侧',
-    area: 35,
-    equipmentStatus: 'maintenance',
-    status: 'maintenance',
-    responsibleDoctor: '王医生'
-  },
-  {
-    id: 4,
-    roomNumber: 'R004',
-    name: '儿科诊室',
-    department: '儿科',
-    type: 'consultation',
-    floor: 2,
-    position: '北侧',
-    area: 28,
-    equipmentStatus: 'normal',
-    status: 'available',
-    responsibleDoctor: '赵医生'
-  },
-  {
-    id: 5,
-    roomNumber: 'R005',
-    name: '急诊抢救室',
-    department: '急诊科',
-    type: 'emergency',
-    floor: 1,
-    position: '中央',
-    area: 50,
-    equipmentStatus: 'normal',
-    status: 'available',
-    responsibleDoctor: '陈医生'
-  }
-])
+// 科室映射
+const departmentMap = {
+  1: '内科',
+  2: '外科', 
+  3: '儿科',
+  4: '妇产科',
+  5: '急诊科',
+  6: '眼科',
+  7: '耳鼻喉科',
+  8: '皮肤科',
+  9: '口腔科',
+  10: '中医科',
+  11: '康复科'
+}
+
+// 根据科室名称获取科室ID
+const getDepartmentIdByName = (deptName) => {
+  const entry = Object.entries(departmentMap).find(([id, name]) => name === deptName)
+  return entry ? parseInt(entry[0]) : undefined
+}
+
+// 状态映射
+const statusMap = {
+  0: { name: '可用', class: 'available' },
+  1: { name: '使用中', class: 'occupied' },
+  2: { name: '维护中', class: 'maintenance' },
+  3: { name: '停用', class: 'disabled' }
+}
 
 // 统计数据
-const totalRooms = computed(() => rooms.value.length)
-const availableRooms = computed(() => rooms.value.filter(r => r.status === 'available').length)
-const maintenanceRooms = computed(() => rooms.value.filter(r => r.status === 'maintenance').length)
+const totalRooms = computed(() => totalCount.value)
+const availableRooms = computed(() => rooms.value.filter(r => r.status === 0).length)
+const maintenanceRooms = computed(() => rooms.value.filter(r => r.status === 2).length)
 const usageRate = computed(() => {
-  const occupied = rooms.value.filter(r => r.status === 'occupied').length
-  return Math.round((occupied / totalRooms.value) * 100)
-})
-
-// 过滤后的诊室
-const filteredRooms = computed(() => {
-  return rooms.value.filter(room => {
-    const matchName = !searchByName.value || room.name.toLowerCase().includes(searchByName.value.toLowerCase())
-    const matchDepartment = !searchByDepartment.value || room.department.toLowerCase().includes(searchByDepartment.value.toLowerCase())
-    const matchRoomNumber = !searchByRoomNumber.value || room.roomNumber.toLowerCase().includes(searchByRoomNumber.value.toLowerCase())
-    const matchStatus = !selectedStatus.value || room.status === selectedStatus.value
-    const matchType = !selectedType.value || room.type === selectedType.value
-    
-    return matchName && matchDepartment && matchRoomNumber && matchStatus && matchType
-  })
+  const occupied = rooms.value.filter(r => r.status === 1).length
+  return totalRooms.value > 0 ? Math.round((occupied / totalRooms.value) * 100) : 0
 })
 
 // 分页数据
-const totalPages = computed(() => Math.ceil(filteredRooms.value.length / pageSize))
-const paginatedRooms = computed(() => {
-  const start = (currentPage.value - 1) * pageSize
-  const end = start + pageSize
-  return filteredRooms.value.slice(start, end)
-})
-
-const visiblePages = computed(() => {
-  const pages = []
-  const total = totalPages.value
-  const current = currentPage.value
-  
-  if (total <= 7) {
-    for (let i = 1; i <= total; i++) {
-      pages.push(i)
-    }
-  } else {
-    if (current <= 4) {
-      for (let i = 1; i <= 5; i++) {
-        pages.push(i)
-      }
-      pages.push('...', total)
-    } else if (current >= total - 3) {
-      pages.push(1, '...')
-      for (let i = total - 4; i <= total; i++) {
-        pages.push(i)
-      }
-    } else {
-      pages.push(1, '...')
-      for (let i = current - 1; i <= current + 1; i++) {
-        pages.push(i)
-      }
-      pages.push('...', total)
-    }
-  }
-  
-  return pages
-})
+const paginatedRooms = computed(() => rooms.value)
 
 // 全选状态
 const isAllSelected = computed(() => {
@@ -541,86 +476,159 @@ const isAllSelected = computed(() => {
          paginatedRooms.value.every(room => selectedRooms.value.includes(room.id))
 })
 
-// 辅助函数
-const getRoomTypeIcon = (type) => {
-  const icons = {
-    consultation: '🏥',
-    examination: '🔍',
-    treatment: '💊',
-    surgery: '🔬',
-    emergency: '🚨'
+// API调用函数
+const fetchClinicRooms = async () => {
+  try {
+    console.log('=== fetchClinicRooms 函数开始执行 ===')
+    loading.value = true
+    console.log('正在获取诊室列表...', {
+      page: currentPage.value,
+      size: pageSize.value,
+      name: searchByName.value || undefined,
+      roomNumber: searchByRoomNumber.value || undefined,
+      departmentName: searchByDepartment.value || undefined,
+      status: selectedStatus.value ? getStatusValue(selectedStatus.value) : undefined
+    })
+    
+    const params = {
+      page: currentPage.value,
+      size: pageSize.value
+    }
+
+    console.log('基础参数:', params)
+    
+    // 添加搜索条件
+    if (searchByName.value) {
+      params.name = searchByName.value
+    }
+    if (searchByRoomNumber.value) {
+      params.roomNumber = searchByRoomNumber.value
+    }
+    if (searchByDepartment.value) {
+      params.departmentName = searchByDepartment.value
+    }
+    if (selectedStatus.value) {
+      const statusValue = getStatusValue(selectedStatus.value)
+      if (statusValue !== null) {
+        params.status = statusValue
+      }
+    }
+    
+    console.log('最终请求参数:', params)
+    
+    const response = await getClinicRoomPageList(params)
+    console.log('API响应:', response)
+    
+    if (response && response.code === 200 && response.data) {
+      const data = response.data
+      console.log('解析后的数据:', data)
+      
+      rooms.value = data.list || []
+      totalCount.value = data.totalCount || 0
+      currentPage.value = data.pageIndex || 1
+      pageSize.value = data.pageSize || 10
+      
+      console.log('更新后的状态:', {
+        rooms: rooms.value.length,
+        totalCount: totalCount.value,
+        currentPage: currentPage.value,
+        pageSize: pageSize.value
+      })
+      
+      ElMessage.success(`成功加载 ${rooms.value.length} 条诊室数据`)
+    } else {
+      console.error('API响应格式错误:', response)
+      ElMessage.error('获取诊室列表失败：响应格式错误')
+      rooms.value = []
+      totalCount.value = 0
+    }
+  } catch (error) {
+    console.error('获取诊室列表失败:', error)
+    ElMessage.error('获取诊室列表失败：' + (error.message || '网络错误'))
+    rooms.value = []
+    totalCount.value = 0
+  } finally {
+    loading.value = false
+    console.log('=== fetchClinicRooms 函数执行完成 ===')
   }
-  return icons[type] || '🏥'
 }
 
-const getRoomTypeName = (type) => {
-  const names = {
-    consultation: '普通诊室',
-    examination: '检查室',
-    treatment: '治疗室',
-    surgery: '手术室',
-    emergency: '急诊室'
+// 获取诊室详情
+const fetchRoomDetail = async (roomId) => {
+  try {
+    console.log('=== 获取诊室详情 ===', roomId)
+    detailLoading.value = true
+    
+    const response = await getClinicRoomDetail(roomId)
+    console.log('诊室详情API响应:', response)
+    
+    if (response && response.code === 200 && response.data) {
+      roomDetail.value = response.data
+      console.log('诊室详情数据:', roomDetail.value)
+      ElMessage.success('诊室详情加载成功')
+    } else {
+      console.error('获取诊室详情失败:', response)
+      ElMessage.error('获取诊室详情失败')
+    }
+  } catch (error) {
+    console.error('获取诊室详情失败:', error)
+    ElMessage.error('获取诊室详情失败：' + (error.message || '网络错误'))
+  } finally {
+    detailLoading.value = false
   }
-  return names[type] || '未知'
 }
 
-const getEquipmentStatusName = (status) => {
-  const names = {
-    normal: '正常',
-    maintenance: '维护中',
-    fault: '故障'
-  }
-  return names[status] || '未知'
+// 工具函数
+const getStatusValue = (statusName) => {
+  const statusEntry = Object.entries(statusMap).find(([key, value]) => value.name === statusName)
+  return statusEntry ? parseInt(statusEntry[0]) : null
 }
 
 const getStatusName = (status) => {
-  const names = {
-    available: '可用',
-    occupied: '使用中',
-    maintenance: '维护中',
-    disabled: '停用'
-  }
-  return names[status] || '未知'
+  return statusMap[status]?.name || '未知状态'
 }
 
-// 事件处理
-const handleNotificationClick = () => {
-  ElMessage.info('查看通知功能')
+const getStatusClass = (status) => {
+  return statusMap[status]?.class || 'unknown'
 }
 
-const handleProfileClick = () => {
-  ElMessage.info('个人资料功能开发中...')
-}
-
-const handleSettingsClick = () => {
-  ElMessage.info('设置功能开发中...')
-}
-
+// 事件处理函数
 const handleSearch = () => {
+  console.log('触发搜索', {
+    name: searchByName.value,
+    roomNumber: searchByRoomNumber.value,
+    department: searchByDepartment.value,
+    status: selectedStatus.value
+  })
   currentPage.value = 1
+  fetchClinicRooms()
 }
 
-const handleFilter = () => {
-  currentPage.value = 1
-}
-
-const clearAllSearch = () => {
+const clearSearch = () => {
   searchByName.value = ''
-  searchByDepartment.value = ''
   searchByRoomNumber.value = ''
+  searchByDepartment.value = ''
   selectedStatus.value = ''
-  selectedType.value = ''
   currentPage.value = 1
+  fetchClinicRooms()
+}
+
+const handleSizeChange = (newSize) => {
+  pageSize.value = newSize
+  currentPage.value = 1
+  fetchClinicRooms()
+}
+
+const handleCurrentChange = (newPage) => {
+  currentPage.value = newPage
+  fetchClinicRooms()
 }
 
 const toggleSelectAll = () => {
   if (isAllSelected.value) {
-    selectedRooms.value = selectedRooms.value.filter(id => 
-      !paginatedRooms.value.some(room => room.id === id)
-    )
+    selectedRooms.value = []
   } else {
-    const newSelections = paginatedRooms.value.map(room => room.id)
-    selectedRooms.value = [...new Set([...selectedRooms.value, ...newSelections])]
+    selectedRooms.value = paginatedRooms.value.map(room => room.id)
   }
 }
 
@@ -633,120 +641,185 @@ const toggleRoomSelection = (roomId) => {
   }
 }
 
-const selectRoom = (roomId) => {
-  toggleRoomSelection(roomId)
+const handleRoomRowClick = (room) => {
+  handleViewDetail(room)
 }
 
-const exportData = () => {
-  ElMessage.success('导出功能开发中...')
+const handleViewDetail = async (room) => {
+  showDetailModal.value = true
+  await fetchRoomDetail(room.id)
 }
 
-const importData = () => {
-  ElMessage.success('导入功能开发中...')
+const closeDetailModal = () => {
+  showDetailModal.value = false
+  roomDetail.value = {}
 }
 
-const batchDelete = () => {
-  ElMessageBox.confirm(
-    `确定要删除选中的 ${selectedRooms.value.length} 个诊室吗？`,
-    '批量删除确认',
-    {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
-    }
-  ).then(() => {
-    rooms.value = rooms.value.filter(room => !selectedRooms.value.includes(room.id))
-    selectedRooms.value = []
-    ElMessage.success('删除成功')
-  }).catch(() => {
-    ElMessage.info('已取消删除')
-  })
-}
-
-const viewRoom = (room) => {
-  ElMessage.info(`查看诊室: ${room.name}`)
+const editRoomFromDetail = () => {
+  closeDetailModal()
+  editRoom(roomDetail.value)
 }
 
 const editRoom = (room) => {
-  editingRoom.value = room
-  roomForm.value = { ...room }
+  roomForm.value = {
+    id: room.id,
+    roomNumber: room.roomNumber || '',
+    name: room.name || '',
+    department: room.departmentName || '',
+    location: room.location || '',
+    status: room.status?.toString() || '0',
+    description: room.description || ''
+  }
   showEditModal.value = true
-}
-
-const manageSchedule = (room) => {
-  ElMessage.info(`管理诊室排班: ${room.name}`)
-}
-
-const deleteRoom = (room) => {
-  ElMessageBox.confirm(
-    `确定要删除诊室 "${room.name}" 吗？`,
-    '删除确认',
-    {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
-    }
-  ).then(() => {
-    const index = rooms.value.findIndex(r => r.id === room.id)
-    if (index > -1) {
-      rooms.value.splice(index, 1)
-      ElMessage.success('删除成功')
-    }
-  }).catch(() => {
-    ElMessage.info('已取消删除')
-  })
 }
 
 const closeModal = () => {
   showAddModal.value = false
   showEditModal.value = false
-  editingRoom.value = null
   roomForm.value = {
     roomNumber: '',
     name: '',
     department: '',
-    type: '',
-    floor: '',
-    position: '',
-    area: '',
-    responsibleDoctor: '',
+    location: '',
+    status: '0',
     description: ''
   }
 }
 
-const saveRoom = () => {
-  if (!roomForm.value.roomNumber || !roomForm.value.name || !roomForm.value.department || !roomForm.value.type) {
-    ElMessage.warning('请填写必填字段')
+const saveRoom = async () => {
+  try {
+    if (!roomForm.value.roomNumber || !roomForm.value.name || !roomForm.value.department) {
+      ElMessage.warning('请填写必填字段')
+      return
+    }
+
+    // 规范化与清理
+    const deptId = getDepartmentIdByName(roomForm.value.department)
+    if (!deptId) {
+      ElMessage.warning('请选择有效的科室')
+      return
+    }
+
+    const trimmedRoomNumber = (roomForm.value.roomNumber || '').trim()
+    const trimmedName = (roomForm.value.name || '').trim()
+    const trimmedLocation = (roomForm.value.location || '').trim()
+    const statusVal = parseInt(roomForm.value.status)
+
+    if (showEditModal.value) {
+      // 编辑时严格按后端样例字段提交
+      const updatePayload = {
+        id: roomForm.value.id,
+        name: trimmedName,
+        roomNumber: trimmedRoomNumber,
+        departmentId: deptId,
+        location: trimmedLocation,
+        status: statusVal
+      }
+      await updateClinicRoom(updatePayload)
+      ElMessage.success('诊室更新成功')
+    } else {
+      // 新增时可以携带更完整的可选字段
+      const createPayload = {
+        roomNumber: trimmedRoomNumber,
+        name: trimmedName,
+        departmentId: deptId,
+        location: trimmedLocation,
+        status: statusVal,
+        description: (roomForm.value.description || '').trim() || undefined
+      }
+      await createClinicRoom(createPayload)
+      ElMessage.success('诊室创建成功')
+    }
+
+    closeModal()
+    fetchClinicRooms()
+  } catch (error) {
+    console.error('保存诊室失败:', error)
+    ElMessage.error('保存诊室失败：' + (error.message || '网络错误'))
+  }
+}
+
+const deleteRoom = async (roomId) => {
+  try {
+    await ElMessageBox.confirm('确定要删除这个诊室吗？', '确认删除', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+
+    const res = await deleteClinicRoom(roomId)
+    if (res && res.code === 200) {
+      ElMessage.success('诊室删除成功')
+      fetchClinicRooms()
+    } else if (res && res.code === 203) {
+      ElMessage.error('删除失败')
+    } else {
+      ElMessage.error('删除失败：' + (res?.msg || '未知错误'))
+    }
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('删除诊室失败:', error)
+      ElMessage.error('删除诊室失败：' + (error.message || '网络错误'))
+    }
+  }
+}
+
+const batchDelete = async () => {
+  if (selectedRooms.value.length === 0) {
+    ElMessage.warning('请选择要删除的诊室')
     return
   }
 
-  if (showAddModal.value) {
-    const newRoom = {
-      id: Date.now(),
-      ...roomForm.value,
-      equipmentStatus: 'normal',
-      status: 'available'
+  try {
+    await ElMessageBox.confirm(`确定要删除选中的 ${selectedRooms.value.length} 个诊室吗？`, '确认批量删除', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+
+    const res = await deleteClinicRoom(selectedRooms.value)
+    if (res && res.code === 200) {
+      ElMessage.success('批量删除成功')
+      selectedRooms.value = []
+      fetchClinicRooms()
+    } else if (res && res.code === 203) {
+      ElMessage.error('删除失败')
+    } else {
+      ElMessage.error('删除失败：' + (res?.msg || '未知错误'))
     }
-    rooms.value.push(newRoom)
-    ElMessage.success('新增诊室成功')
-  } else if (showEditModal.value) {
-    const index = rooms.value.findIndex(r => r.id === editingRoom.value.id)
-    if (index > -1) {
-      rooms.value[index] = { ...editingRoom.value, ...roomForm.value }
-      ElMessage.success('编辑诊室成功')
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('批量删除失败:', error)
+      ElMessage.error('批量删除失败：' + (error.message || '网络错误'))
     }
   }
-
-  closeModal()
 }
 
-// 生命周期
-onMounted(() => {
-  // 页面加载完成
-})
+const exportData = () => {
+  ElMessage.info('导出功能开发中...')
+}
 
-onUnmounted(() => {
-  // 清理工作
+const importData = () => {
+  ElMessage.info('导入功能开发中...')
+}
+
+// 顶部导航事件处理
+const handleNotificationClick = () => {
+  console.log('通知点击')
+}
+
+const handleProfileClick = () => {
+  console.log('个人资料点击')
+}
+
+const handleSettingsClick = () => {
+  console.log('设置点击')
+}
+
+// 组件挂载时获取数据
+onMounted(() => {
+  console.log('ClinicRoomManagerView 组件已挂载')
+  fetchClinicRooms()
 })
 </script>
 
@@ -766,12 +839,6 @@ $border: #ebeef5;
   background: white;
   border-radius: 16px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  padding: 20px;
-  transition: all 0.3s ease;
-  &:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
-  }
 }
 
 .clinic-room-manager {
@@ -811,15 +878,16 @@ $border: #ebeef5;
   // 统计卡片
   .stats-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 20px;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 24px;
     margin-bottom: 30px;
 
     .card {
       @include card;
+      padding: 16px 18px;
       display: flex;
       align-items: center;
-      gap: 16px;
+      gap: 18px;
 
       &-icon {
         width: 50px;
@@ -838,18 +906,18 @@ $border: #ebeef5;
 
       &-info {
         h3 {
-          margin: 0 0 4px 0;
+          margin: 0 0 6px 0;
           font-size: 15px;
           color: #555;
         }
         .number {
-          font-size: 24px;
+          font-size: 26px;
           font-weight: 600;
           color: $text;
           margin: 0;
         }
         .desc {
-          margin: 0;
+          margin: 4px 0 0 0;
           font-size: 13px;
           color: #999;
         }
@@ -866,8 +934,8 @@ $border: #ebeef5;
 
     .action-btn {
       padding: 12px 24px;
-      border-radius: 12px;
-      font-size: 15px;
+      border-radius: 8px;
+      font-size: 14px;
       font-weight: 500;
       cursor: pointer;
       transition: all 0.3s ease;
@@ -886,7 +954,7 @@ $border: #ebeef5;
         background: white;
         color: $primary;
         border: 2px solid $primary;
-        &:hover { background: #e6f7ff; }
+        &:hover { background: rgba($primary, 0.1); }
       }
 
       &.danger {
@@ -980,7 +1048,6 @@ $border: #ebeef5;
         }
       }
 
-      // 清空搜索按钮
       .clear-search-btn {
         display: flex;
         align-items: center;
@@ -1070,17 +1137,14 @@ $border: #ebeef5;
             cursor: pointer;
             accent-color: $primary;
           }
-
-          &:nth-child(1) { width: 5%; } /* 选择框 */
-          &:nth-child(2) { width: 10%; } /* 诊室编号 */
-          &:nth-child(3) { width: 15%; } /* 诊室名称 */
-          &:nth-child(4) { width: 12%; } /* 所属科室 */
-          &:nth-child(5) { width: 10%; } /* 诊室类型 */
-          &:nth-child(6) { width: 12%; } /* 楼层位置 */
-          &:nth-child(7) { width: 10%; } /* 设备状态 */
-          &:nth-child(8) { width: 10%; } /* 当前状态 */
-          &:nth-child(9) { width: 10%; } /* 负责医生 */
-          &:nth-child(10) { width: 6%; } /* 操作 */
+          // 按当前7列布局设置宽度：选择框、编号、名称、科室、位置、状态、操作
+          &:nth-child(1) { width: 5%; }
+          &:nth-child(2) { width: 12%; }
+          &:nth-child(3) { width: 18%; }
+          &:nth-child(4) { width: 15%; }
+          &:nth-child(5) { width: 20%; }
+          &:nth-child(6) { width: 10%; }
+          &:nth-child(7) { width: 10%; }
         }
 
         .table-row {
@@ -1108,7 +1172,6 @@ $border: #ebeef5;
               text-align: center;
             }
 
-            // 选择框
             .select-checkbox {
               width: 16px;
               height: 16px;
@@ -1116,7 +1179,6 @@ $border: #ebeef5;
               accent-color: $primary;
             }
 
-            // 诊室编号
             .room-number {
               font-weight: 600;
               color: $primary;
@@ -1124,7 +1186,6 @@ $border: #ebeef5;
               font-size: 13px;
             }
 
-            // 诊室名称单元格
             .room-name-cell {
               display: flex;
               align-items: center;
@@ -1156,41 +1217,6 @@ $border: #ebeef5;
               }
             }
 
-            // 类型标签
-            .type-badge {
-              display: inline-block;
-              padding: 2px 8px;
-              border-radius: 12px;
-              font-size: 12px;
-              font-weight: 500;
-
-              &.consultation {
-                background: rgba($primary, 0.1);
-                color: $primary;
-              }
-
-              &.examination {
-                background: rgba($success, 0.1);
-                color: $success;
-              }
-
-              &.treatment {
-                background: rgba($warning, 0.1);
-                color: $warning;
-              }
-
-              &.surgery {
-                background: rgba($danger, 0.1);
-                color: $danger;
-              }
-
-              &.emergency {
-                background: rgba($purple, 0.1);
-                color: $purple;
-              }
-            }
-
-            // 科室信息
             .department-info {
               line-height: 1.4;
               
@@ -1200,32 +1226,13 @@ $border: #ebeef5;
               }
             }
 
-            // 位置信息
             .location-info {
               line-height: 1.4;
-              .floor {
-                font-weight: 500;
-                color: $text;
-              }
-              .position {
+              .location {
                 color: #666;
-                font-size: 12px;
               }
             }
 
-            // 设备状态标签
-            .equipment-badge {
-              padding: 4px 8px;
-              border-radius: 12px;
-              font-size: 12px;
-              font-weight: 500;
-
-              &.normal { background: rgba($success, 0.1); color: $success; }
-              &.maintenance { background: rgba($warning, 0.1); color: $warning; }
-              &.fault { background: rgba($danger, 0.1); color: $danger; }
-            }
-
-            // 状态标签
             .status-badge {
               padding: 4px 8px;
               border-radius: 12px;
@@ -1238,48 +1245,58 @@ $border: #ebeef5;
               &.disabled { background: rgba(#999, 0.1); color: #999; }
             }
 
-            // 医生信息
-            .doctor-info {
-              line-height: 1.4;
-              .doctor-name {
-                font-weight: 500;
-                color: $text;
-              }
-            }
+            // 已移除负责医生列，无需相关样式
 
-            // 操作按钮
             .table-actions {
               display: flex;
               gap: 4px;
               justify-content: center;
 
               .action-btn-mini {
-                padding: 4px 6px;
+                padding: 6px 8px;
                 background: none;
                 border: none;
                 cursor: pointer;
                 border-radius: 4px;
                 transition: all 0.3s ease;
-                font-size: 12px;
+                font-size: 14px;
+                min-width: 32px;
+                height: 32px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
 
-                &.view:hover {
-                  background: rgba($primary, 0.1);
-                  color: $primary;
+                &.view {
+                  background: #f0f9ff;
+                  color: #0369a1;
+                  border: 1px solid #bae6fd;
+
+                  &:hover {
+                    background: #e0f2fe;
+                    border-color: #7dd3fc;
+                  }
                 }
 
-                &.edit:hover {
-                  background: rgba($warning, 0.1);
-                  color: $warning;
+                &.edit {
+                  background: #fef3c7;
+                  color: #d97706;
+                  border: 1px solid #fde68a;
+
+                  &:hover {
+                    background: #fef08a;
+                    border-color: #facc15;
+                  }
                 }
 
-                &.schedule:hover {
-                  background: rgba($purple, 0.1);
-                  color: $purple;
-                }
+                &.delete {
+                  background: #fef2f2;
+                  color: #dc2626;
+                  border: 1px solid #fecaca;
 
-                &.delete:hover {
-                  background: rgba($danger, 0.1);
-                  color: $danger;
+                  &:hover {
+                    background: #fee2e2;
+                    border-color: #fca5a5;
+                  }
                 }
               }
             }
@@ -1288,61 +1305,54 @@ $border: #ebeef5;
       }
     }
 
-    // 分页
-    .pagination {
+    .pagination-wrapper {
       display: flex;
       justify-content: center;
-      align-items: center;
-      gap: 8px;
-      padding-top: 20px;
-      border-top: 1px solid $border;
-
-      .page-btn {
-        padding: 8px 16px;
-        border: 2px solid $border;
-        background: white;
-        border-radius: 8px;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        font-size: 14px;
-
-        &:hover:not(:disabled) {
-          border-color: $primary;
-          color: $primary;
+      margin-top: 30px;
+      padding: 20px 0;
+      
+      :deep(.el-pagination) {
+        .el-pagination__total {
+          color: #666;
+          font-weight: 500;
         }
 
-        &:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
+        .el-pagination__sizes {
+          .el-select {
+            .el-input__inner {
+              border-radius: 8px;
+            }
+          }
         }
-      }
 
-      .page-numbers {
-        display: flex;
-        gap: 4px;
-
-        .page-number {
-          min-width: 36px;
-          height: 36px;
-          border: 2px solid $border;
-          background: white;
+        .el-pager li {
           border-radius: 8px;
-          cursor: pointer;
-          transition: all 0.3s ease;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 14px;
-
+          margin: 0 2px;
+          
           &.active {
-            border-color: $primary;
             background: $primary;
             color: white;
           }
-
-          &:not(.active):hover {
-            border-color: $primary;
+          
+          &:hover:not(.active) {
+            background: #e6f7ff;
             color: $primary;
+          }
+        }
+
+        .btn-prev, .btn-next {
+          border-radius: 8px;
+          margin: 0 2px;
+          
+          &:hover:not(:disabled) {
+            background: #e6f7ff;
+            color: $primary;
+          }
+        }
+
+        .el-pagination__jump {
+          .el-input__inner {
+            border-radius: 8px;
           }
         }
       }
@@ -1486,6 +1496,91 @@ $border: #ebeef5;
   }
 }
 
+// 详情弹窗特殊样式
+.detail-modal {
+  max-width: 600px;
+  width: 90%;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  padding: 20px 0;
+}
+
+.detail-item {
+  background: #f8f9fc;
+  padding: 16px;
+  border-radius: 8px;
+  border-left: 4px solid $primary;
+
+  label {
+    display: block;
+    font-weight: 600;
+    color: #666;
+    font-size: 14px;
+    margin-bottom: 8px;
+  }
+
+  .detail-value {
+    display: block;
+    font-size: 16px;
+    color: #333;
+    font-weight: 500;
+
+    &.room-number {
+      font-family: 'Courier New', monospace;
+      background: #e3f2fd;
+      padding: 4px 8px;
+      border-radius: 4px;
+      display: inline-block;
+    }
+
+    &.room-name {
+      color: $primary;
+      font-weight: 600;
+    }
+
+    &.department {
+      color: $success;
+      font-weight: 600;
+    }
+
+    &.location {
+      color: #666;
+    }
+  }
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+
+  .loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid $primary;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 16px;
+  }
+
+  p {
+    color: #666;
+    font-size: 14px;
+  }
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
 // 响应式
 @media (max-width: 768px) {
   .main-layout {
@@ -1493,6 +1588,7 @@ $border: #ebeef5;
   }
 
   .content {
+    margin-left: 0;
     padding: 20px;
   }
 

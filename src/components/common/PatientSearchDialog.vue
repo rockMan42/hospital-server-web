@@ -9,6 +9,9 @@
 
     <div v-if="!creating">
       <el-table :data="patients" height="360" v-loading="loading">
+        <el-table-column label="就诊卡号" width="180">
+          <template #default="{ row }">{{ row.patientId || row.patient_id || '-' }}</template>
+        </el-table-column>
         <el-table-column prop="name" label="姓名" width="120" />
         <el-table-column prop="gender" label="性别" width="80">
           <template #default="{ row }">{{ row.gender || '-' }}</template>
@@ -39,6 +42,9 @@
 
     <div v-else class="create-form">
       <el-form :model="form" :rules="rules" ref="formRef" label-width="90px">
+        <el-form-item label="就诊卡号" prop="patientId">
+          <el-input v-model="form.patientId" placeholder="例如：HOS2025000001" />
+        </el-form-item>
         <el-form-item label="姓名" prop="name">
           <el-input v-model="form.name" />
         </el-form-item>
@@ -102,6 +108,7 @@ const creating = ref(false)
 const submitting = ref(false)
 const formRef = ref()
 const form = ref({
+  patientId: '',
   name: '',
   gender: '',
   idCard: '',

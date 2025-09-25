@@ -298,39 +298,43 @@
             </div>
             <div class="form-group">
               <label>科室代码 <span class="required">*</span></label>
-              <input v-model="newDepartment.code" type="text" placeholder="请输入科室代码">
+              <input v-model="newDepartment.code" type="text" placeholder="请输入科室代码，如：NK001">
             </div>
             <div class="form-group">
               <label>科室类型 <span class="required">*</span></label>
-              <select v-model="newDepartment.type">
-                <option value="">请选择类型</option>
-                <option value="clinical">临床科室</option>
-                <option value="medical">医技科室</option>
-                <option value="administrative">行政科室</option>
+              <select v-model="newDepartment.dcId">
+                <option value="">请选择科室类型</option>
+                <option value="1">内科</option>
+                <option value="2">外科</option>
+                <option value="3">儿科</option>
+                <option value="4">妇产科</option>
+                <option value="5">急诊科</option>
+                <option value="6">眼科</option>
+                <option value="7">耳鼻喉科</option>
+                <option value="8">皮肤科</option>
+                <option value="9">口腔科</option>
+                <option value="10">中医科</option>
+                <option value="11">康复科</option>
               </select>
             </div>
             <div class="form-group">
-              <label>主任医师</label>
-              <input v-model="newDepartment.director" type="text" placeholder="请输入主任医师姓名">
-            </div>
-            <div class="form-group">
-              <label>职称</label>
-              <input v-model="newDepartment.directorTitle" type="text" placeholder="请输入职称">
+              <label>科室职称</label>
+              <input v-model="newDepartment.jobTitle" type="text" placeholder="请输入科室职称，如：主任医师">
             </div>
             <div class="form-group">
               <label>联系电话</label>
               <input v-model="newDepartment.phone" type="text" placeholder="请输入联系电话">
             </div>
             <div class="form-group">
-              <label>成立年份</label>
-              <input v-model="newDepartment.establishedYear" type="number" placeholder="请输入成立年份" min="1900" max="2025">
+              <label>成立时间</label>
+              <input v-model="newDepartment.establishedTime" type="date" placeholder="请选择成立时间">
             </div>
             <div class="form-group">
-              <label>初始状态</label>
+              <label>科室状态</label>
               <select v-model="newDepartment.status">
-                <option value="active">正常运营</option>
-                <option value="maintenance">维护中</option>
-                <option value="suspended">暂停服务</option>
+                <option :value="0">正常运营</option>
+                <option :value="1">维护中</option>
+                <option :value="2">暂停使用</option>
               </select>
             </div>
             <div class="form-group full-width">
@@ -340,8 +344,170 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button class="action-btn outline" @click="closeAddDepartmentModal">取消</button>
-          <button class="action-btn primary" @click="addDepartment">确认添加</button>
+          <button class="action-btn outline" @click="closeAddDepartmentModal" :disabled="loading">取消</button>
+          <button class="action-btn primary" @click="addDepartment" :disabled="loading">
+            <span v-if="loading">创建中...</span>
+            <span v-else>确认添加</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 编辑科室弹窗 -->
+    <div v-if="showEditModal" class="modal-overlay" @click="closeEditDepartmentModal">
+      <div class="modal-content" @click.stop v-loading="editLoading">
+        <div class="modal-header">
+          <h3>编辑科室</h3>
+          <button class="close-btn" @click="closeEditDepartmentModal">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-grid">
+            <div class="form-group">
+              <label>科室名称 <span class="required">*</span></label>
+              <input v-model="editDepartmentData.name" type="text" placeholder="请输入科室名称">
+            </div>
+            <div class="form-group">
+              <label>科室代码 <span class="required">*</span></label>
+              <input v-model="editDepartmentData.code" type="text" placeholder="请输入科室代码，如：NK001">
+            </div>
+            <div class="form-group">
+              <label>科室类型 <span class="required">*</span></label>
+              <select v-model="editDepartmentData.dcId">
+                <option value="">请选择科室类型</option>
+                <option value="1">内科</option>
+                <option value="2">外科</option>
+                <option value="3">儿科</option>
+                <option value="4">妇产科</option>
+                <option value="5">急诊科</option>
+                <option value="6">眼科</option>
+                <option value="7">耳鼻喉科</option>
+                <option value="8">皮肤科</option>
+                <option value="9">口腔科</option>
+                <option value="10">中医科</option>
+                <option value="11">康复科</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>科室职称</label>
+              <input v-model="editDepartmentData.jobTitle" type="text" placeholder="请输入科室职称，如：主任医师">
+            </div>
+            <div class="form-group">
+              <label>联系电话</label>
+              <input v-model="editDepartmentData.phone" type="text" placeholder="请输入联系电话">
+            </div>
+            <div class="form-group">
+              <label>成立时间</label>
+              <input v-model="editDepartmentData.establishedTime" type="date" placeholder="请选择成立时间">
+            </div>
+            <div class="form-group">
+              <label>科室状态</label>
+              <select v-model="editDepartmentData.status">
+                <option :value="0">正常运营</option>
+                <option :value="1">维护中</option>
+                <option :value="2">暂停使用</option>
+              </select>
+            </div>
+            <div class="form-group full-width">
+              <label>科室描述</label>
+              <textarea v-model="editDepartmentData.description" placeholder="请输入科室描述信息" rows="3"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="action-btn outline" @click="closeEditDepartmentModal" :disabled="editLoading">取消</button>
+          <button class="action-btn primary" @click="updateDepartmentInfo" :disabled="editLoading">
+            <span v-if="editLoading">更新中...</span>
+            <span v-else>保存修改</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 科室详情弹窗 -->
+    <div v-if="showDetailModal" class="modal-overlay" @click="closeDetailModal">
+      <div class="modal-content detail-modal" @click.stop v-loading="detailLoading">
+        <div class="modal-header">
+          <h3>科室详情</h3>
+          <button class="close-btn" @click="closeDetailModal">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="detail-grid">
+            <!-- 基本信息 -->
+            <div class="detail-section">
+              <h4>基本信息</h4>
+              <div class="detail-row">
+                <span class="label">科室名称：</span>
+                <span class="value">{{ departmentDetail.name || '-' }}</span>
+              </div>
+              <div class="detail-row">
+                <span class="label">科室代码：</span>
+                <span class="value code">{{ departmentDetail.code || '-' }}</span>
+              </div>
+              <div class="detail-row">
+                <span class="label">科室类型：</span>
+                <span class="value">
+                  <span class="type-badge clinical">{{ departmentDetail.departmentClassName || '-' }}</span>
+                </span>
+              </div>
+              <div class="detail-row">
+                <span class="label">成立时间：</span>
+                <span class="value">{{ departmentDetail.establishedTime || '-' }}</span>
+              </div>
+              <div class="detail-row">
+                <span class="label">科室状态：</span>
+                <span class="value">
+                  <span class="status-badge" :class="getStatusInfo(departmentDetail.status).class">
+                    <span v-if="departmentDetail.status === 0">✅ {{ getStatusInfo(departmentDetail.status).text }}</span>
+                    <span v-else-if="departmentDetail.status === 1">🔧 {{ getStatusInfo(departmentDetail.status).text }}</span>
+                    <span v-else>⏸️ {{ getStatusInfo(departmentDetail.status).text }}</span>
+                  </span>
+                </span>
+              </div>
+            </div>
+
+            <!-- 负责人信息 -->
+            <div class="detail-section">
+              <h4>负责人信息</h4>
+              <div class="detail-row">
+                <span class="label">主任医师：</span>
+                <span class="value">{{ departmentDetail.doctorName || '-' }}</span>
+              </div>
+              <div class="detail-row">
+                <span class="label">职称：</span>
+                <span class="value">
+                  <span class="title-badge">{{ departmentDetail.jobTitle || '-' }}</span>
+                </span>
+              </div>
+              <div class="detail-row">
+                <span class="label">联系电话：</span>
+                <span class="value">{{ departmentDetail.phone || '-' }}</span>
+              </div>
+            </div>
+
+            <!-- 统计信息 -->
+            <div class="detail-section">
+              <h4>统计信息</h4>
+              <div class="detail-row">
+                <span class="label">医生数量：</span>
+                <span class="value count">{{ departmentDetail.doctorCount || 0 }} 人</span>
+              </div>
+              <div class="detail-row">
+                <span class="label">诊室数量：</span>
+                <span class="value count">{{ departmentDetail.clinicRoomCount || 0 }} 间</span>
+              </div>
+            </div>
+
+            <!-- 科室描述 -->
+            <div class="detail-section full-width">
+              <h4>科室描述</h4>
+              <div class="description-content">
+                {{ departmentDetail.description || '暂无描述' }}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="action-btn outline" @click="closeDetailModal">关闭</button>
         </div>
       </div>
     </div>
@@ -355,7 +521,7 @@ import { useStore } from 'vuex'
 import { ElNotification, ElMessage, ElMessageBox } from 'element-plus'
 import SideLeft from '@/components/manager/SideLeft.vue'
 import AdminHeader from '@/components/manager/AdminHeader.vue'
-import { listDepartments } from '@/api/departments'
+import { listDepartments, createDepartment, getDepartmentDetail, updateDepartment, deleteDepartment } from '@/api/departments'
 
 // 状态管理
 const dropdownVisible = ref(false)
@@ -368,7 +534,11 @@ const currentPage = ref(1)
 const pageSize = ref(10)
 const selectedDepartments = ref([])
 const showAddModal = ref(false)
+const showEditModal = ref(false)
+const showDetailModal = ref(false)
 const loading = ref(false)
+const detailLoading = ref(false)
+const editLoading = ref(false)
 
 // 分页数据
 const pagination = ref({
@@ -389,13 +559,29 @@ let username = store.state.user?.username || '管理员'
 const newDepartment = ref({
   name: '',
   code: '',
-  type: '',
-  director: '',
-  directorTitle: '',
+  description: '',
+  dcId: '',
+  jobTitle: '',
   phone: '',
-  establishedYear: new Date().getFullYear(),
-  status: 'active',
-  description: ''
+  establishedTime: '',
+  status: 0
+})
+
+// 科室详情数据
+const departmentDetail = ref({})
+
+// 编辑科室表单数据
+const editDepartmentData = ref({
+  id: '',
+  name: '',
+  code: '',
+  description: '',
+  dcId: '',
+  doctorId: '',
+  jobTitle: '',
+  phone: '',
+  establishedTime: '',
+  status: 0
 })
 
 // 科室类型映射
@@ -571,58 +757,261 @@ const closeAddDepartmentModal = () => {
   newDepartment.value = {
     name: '',
     code: '',
-    type: '',
-    director: '',
-    directorTitle: '',
+    description: '',
+    dcId: '',
+    jobTitle: '',
     phone: '',
-    establishedYear: new Date().getFullYear(),
-    status: 'active',
-    description: ''
+    establishedTime: '',
+    status: 0
   }
 }
 
-const addDepartment = () => {
-  // 简单验证
-  if (!newDepartment.value.name || !newDepartment.value.code || !newDepartment.value.type) {
+const addDepartment = async () => {
+  // 表单验证
+  if (!newDepartment.value.name || !newDepartment.value.code || !newDepartment.value.dcId) {
     ElMessage.warning('请填写必要信息（科室名称、代码、类型）')
     return
   }
 
-  // 检查科室代码是否重复
-  const codeExists = departmentList.value.some(dept => dept.code === newDepartment.value.code)
-  if (codeExists) {
-    ElMessage.warning('科室代码已存在，请使用其他代码')
+  // 验证科室代码格式
+  if (!/^[A-Z]{2,3}\d{3}$/.test(newDepartment.value.code)) {
+    ElMessage.warning('科室代码格式不正确，请使用格式：NK001')
     return
   }
 
-  // 添加新科室
-  const department = {
-    id: Date.now(),
-    ...newDepartment.value,
-    doctorCount: 0,
-    roomCount: 0,
-    establishedYear: parseInt(newDepartment.value.establishedYear)
+  // 验证手机号格式（如果填写了）
+  if (newDepartment.value.phone && !/^1[3-9]\d{9}$/.test(newDepartment.value.phone)) {
+    ElMessage.warning('手机号格式不正确')
+    return
   }
 
-  departmentList.value.unshift(department)
+  try {
+    loading.value = true
+    
+    // 准备API请求数据
+    const departmentData = {
+      name: newDepartment.value.name.trim(),
+      code: newDepartment.value.code.trim().toUpperCase(),
+      description: newDepartment.value.description.trim(),
+      dcId: parseInt(newDepartment.value.dcId),
+      jobTitle: newDepartment.value.jobTitle.trim(),
+      phone: newDepartment.value.phone.trim(),
+      establishedTime: newDepartment.value.establishedTime,
+      status: parseInt(newDepartment.value.status)
+    }
+
+    console.log('创建科室请求数据:', departmentData)
+
+    // 调用API创建科室
+    const response = await createDepartment(departmentData)
+    
+    console.log('创建科室响应:', response)
+
+    if (response.code === 200) {
+      ElNotification({
+        title: '创建成功',
+        message: `科室 ${departmentData.name} 已成功创建`,
+        type: 'success'
+      })
+
+      // 关闭弹窗并刷新列表
+      closeAddDepartmentModal()
+      fetchDepartments()
+    } else {
+      ElMessage.error(response.msg || '创建科室失败')
+    }
+  } catch (error) {
+    console.error('创建科室失败:', error)
+    
+    // 处理不同类型的错误
+    if (error.response?.data?.msg) {
+      ElMessage.error(error.response.data.msg)
+    } else if (error.message) {
+      ElMessage.error(`创建失败: ${error.message}`)
+    } else {
+      ElMessage.error('创建科室失败，请稍后重试')
+    }
+  } finally {
+    loading.value = false
+  }
+}
+
+const viewDepartmentDetail = async (department) => {
+  try {
+    detailLoading.value = true
+    console.log('获取科室详情，ID:', department.id)
+    
+    // 调用API获取科室详情
+    const response = await getDepartmentDetail(department.id)
+    console.log('科室详情响应:', response)
+    
+    if (response.code === 200) {
+      departmentDetail.value = response.data
+      showDetailModal.value = true
+      
+      console.log('科室详情数据:', departmentDetail.value)
+    } else {
+      ElMessage.error(response.msg || '获取科室详情失败')
+    }
+  } catch (error) {
+    console.error('获取科室详情失败:', error)
+    ElMessage.error('获取科室详情失败，请稍后重试')
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+// 关闭详情弹窗
+const closeDetailModal = () => {
+  showDetailModal.value = false
+  departmentDetail.value = {}
+}
+
+const editDepartment = async (department) => {
+  console.log('🔧 点击编辑按钮，科室信息:', department)
+  console.log('🔧 当前showEditModal状态:', showEditModal.value)
   
-  ElNotification({
-    title: '添加成功',
-    message: `科室 ${department.name} 已成功添加`,
-    type: 'success'
-  })
-
-  closeAddDepartmentModal()
+  try {
+    editLoading.value = true
+    console.log('获取科室详情用于编辑，ID:', department.id)
+    
+    // 调用API获取科室详情
+    const response = await getDepartmentDetail(department.id)
+    console.log('科室详情响应:', response)
+    
+    if (response.code === 200) {
+      const data = response.data
+      
+      // 回显数据到编辑表单
+      editDepartmentData.value = {
+        id: data.id,
+        name: data.name || '',
+        code: data.code || '',
+        description: data.description || '',
+        dcId: data.dcId ? String(data.dcId) : '',
+        jobTitle: data.jobTitle || '',
+        phone: data.phone || '',
+        establishedTime: data.establishedTime ? data.establishedTime.split('T')[0] : '',
+        status: data.status !== undefined ? data.status : 0
+      }
+      
+      console.log('🔧 API返回的原始数据:', data)
+      console.log('🔧 编辑表单数据:', editDepartmentData.value)
+      console.log('🔧 dcId处理: 原始值=', data.dcId, '转换后=', String(data.dcId))
+      console.log('🔧 成立时间处理: 原始值=', data.establishedTime, '转换后=', data.establishedTime ? data.establishedTime.split('T')[0] : '')
+      
+      // 显示编辑弹窗
+      showEditModal.value = true
+      console.log('🔧 设置showEditModal为true，当前值:', showEditModal.value)
+      
+      ElMessage.success('科室信息已完整回显，可以开始编辑')
+    } else {
+      ElMessage.error(response.msg || '获取科室详情失败')
+    }
+  } catch (error) {
+    console.error('获取科室详情失败:', error)
+    ElMessage.error('获取科室详情失败，请稍后重试')
+  } finally {
+    editLoading.value = false
+  }
 }
 
-const viewDepartmentDetail = (department) => {
-  ElMessage.info(`查看科室详情：${department.name}`)
-  // 实现查看详情功能
+// 关闭编辑弹窗
+const closeEditDepartmentModal = () => {
+  showEditModal.value = false
+  // 重置编辑表单
+  editDepartmentData.value = {
+    id: '',
+    name: '',
+    code: '',
+    description: '',
+    dcId: '',
+    doctorId: '',
+    jobTitle: '',
+    phone: '',
+    establishedTime: '',
+    status: 0
+  }
 }
 
-const editDepartment = (department) => {
-  ElMessage.info(`编辑科室：${department.name}`)
-  // 实现编辑功能
+// 更新科室信息
+const updateDepartmentInfo = async () => {
+  // 表单验证
+  if (!editDepartmentData.value.name || !editDepartmentData.value.code || !editDepartmentData.value.dcId) {
+    ElMessage.warning('请填写必要信息（科室名称、代码、类型）')
+    return
+  }
+
+  // 验证科室代码格式
+  if (!/^[A-Z]{2,3}\d{3}$/.test(editDepartmentData.value.code)) {
+    ElMessage.warning('科室代码格式不正确，请使用格式：NK001')
+    return
+  }
+
+  // 验证手机号格式（如果填写了）
+  if (editDepartmentData.value.phone && !/^1[3-9]\d{9}$/.test(editDepartmentData.value.phone)) {
+    ElMessage.warning('手机号格式不正确')
+    return
+  }
+
+  try {
+    editLoading.value = true
+    
+    // 准备API请求数据
+    const departmentData = {
+      id: parseInt(editDepartmentData.value.id),
+      name: editDepartmentData.value.name.trim(),
+      code: editDepartmentData.value.code.trim().toUpperCase(),
+      description: editDepartmentData.value.description.trim(),
+      dcId: parseInt(editDepartmentData.value.dcId),
+      doctorId: editDepartmentData.value.doctorId ? parseInt(editDepartmentData.value.doctorId) : undefined,
+      jobTitle: editDepartmentData.value.jobTitle.trim(),
+      phone: editDepartmentData.value.phone.trim(),
+      establishedTime: editDepartmentData.value.establishedTime,
+      status: parseInt(editDepartmentData.value.status)
+    }
+
+    // 清理空字段
+    Object.keys(departmentData).forEach(key => {
+      if (departmentData[key] === '' || departmentData[key] === undefined) {
+        delete departmentData[key]
+      }
+    })
+
+    console.log('更新科室请求数据:', departmentData)
+
+    // 调用API更新科室
+    const response = await updateDepartment(departmentData)
+    
+    console.log('更新科室响应:', response)
+
+    if (response.code === 200) {
+      ElNotification({
+        title: '更新成功',
+        message: `科室 ${editDepartmentData.value.name} 信息已更新`,
+        type: 'success'
+      })
+
+      // 关闭弹窗并刷新列表
+      closeEditDepartmentModal()
+      fetchDepartments()
+    } else {
+      ElMessage.error(response.msg || '更新科室失败')
+    }
+  } catch (error) {
+    console.error('更新科室失败:', error)
+    
+    // 处理不同类型的错误
+    if (error.response?.data?.msg) {
+      ElMessage.error(error.response.data.msg)
+    } else if (error.message) {
+      ElMessage.error(`更新失败: ${error.message}`)
+    } else {
+      ElMessage.error('更新科室失败，请稍后重试')
+    }
+  } finally {
+    editLoading.value = false
+  }
 }
 
 const manageDepartment = (department) => {
@@ -641,34 +1030,46 @@ const confirmDeleteDepartment = (department) => {
       confirmButtonClass: 'el-button--danger'
     }
   ).then(() => {
-    deleteDepartment(department.id)
+    deleteDepartmentById(department.id)
   }).catch(() => {
     ElMessage.info('已取消删除')
   })
 }
 
-const deleteDepartment = (departmentId) => {
-  const index = departmentList.value.findIndex(d => d.id === departmentId)
-  if (index > -1) {
-    const deletedDepartment = departmentList.value[index]
-    departmentList.value.splice(index, 1)
+// 单个删除科室
+const deleteDepartmentById = async (departmentId) => {
+  try {
+    console.log('🗑️ 删除科室，ID:', departmentId)
     
-    // 从选中列表中移除
-    const selectedIndex = selectedDepartments.value.indexOf(departmentId)
-    if (selectedIndex > -1) {
-      selectedDepartments.value.splice(selectedIndex, 1)
-    }
+    // 调用API删除科室
+    const response = await deleteDepartment(departmentId)
+    console.log('删除科室响应:', response)
     
-    ElNotification({
-      title: '删除成功',
-      message: `科室 ${deletedDepartment.name} 已被删除`,
-      type: 'success'
-    })
-    
-    // 如果当前页没有数据且不是第一页，跳转到上一页
-    if (paginatedDepartments.value.length === 0 && pagination.value.page > 1) {
-      pagination.value.page--
+    if (response.code === 200) {
+      ElNotification({
+        title: '删除成功',
+        message: '科室已成功删除',
+        type: 'success'
+      })
+      
+      // 刷新科室列表
       fetchDepartments()
+      
+      // 清空选中状态
+      selectedDepartments.value = selectedDepartments.value.filter(id => id !== departmentId)
+    } else {
+      ElMessage.error(response.msg || '删除科室失败')
+    }
+  } catch (error) {
+    console.error('删除科室失败:', error)
+    
+    // 处理不同类型的错误
+    if (error.response?.data?.msg) {
+      ElMessage.error(error.response.data.msg)
+    } else if (error.message) {
+      ElMessage.error(`删除失败: ${error.message}`)
+    } else {
+      ElMessage.error('删除科室失败，请稍后重试')
     }
   }
 }
@@ -709,7 +1110,8 @@ const toggleDepartmentSelect = (departmentId) => {
   }
 }
 
-const batchDeleteDepartments = () => {
+// 批量删除科室
+const batchDeleteDepartments = async () => {
   if (selectedDepartments.value.length === 0) {
     ElMessage.warning('请先选择要删除的科室')
     return
@@ -724,23 +1126,41 @@ const batchDeleteDepartments = () => {
       type: 'warning',
       confirmButtonClass: 'el-button--danger'
     }
-  ).then(() => {
-    const deletedCount = selectedDepartments.value.length
-    
-    // 删除选中的科室
-    departmentList.value = departmentList.value.filter(d => !selectedDepartments.value.includes(d.id))
-    selectedDepartments.value = []
-    
-    ElNotification({
-      title: '批量删除成功',
-      message: `已删除 ${deletedCount} 个科室`,
-      type: 'success'
-    })
-    
-    // 调整页码
-    if (paginatedDepartments.value.length === 0 && pagination.value.page > 1) {
-      pagination.value.page = 1
-      fetchDepartments()
+  ).then(async () => {
+    try {
+      const deletedCount = selectedDepartments.value.length
+      console.log('🗑️ 批量删除科室，IDs:', selectedDepartments.value)
+      
+      // 调用API批量删除科室
+      const response = await deleteDepartment(selectedDepartments.value)
+      console.log('批量删除科室响应:', response)
+      
+      if (response.code === 200) {
+        ElNotification({
+          title: '批量删除成功',
+          message: `已删除 ${deletedCount} 个科室`,
+          type: 'success'
+        })
+        
+        // 清空选中状态
+        selectedDepartments.value = []
+        
+        // 刷新科室列表
+        fetchDepartments()
+      } else {
+        ElMessage.error(response.msg || '批量删除科室失败')
+      }
+    } catch (error) {
+      console.error('批量删除科室失败:', error)
+      
+      // 处理不同类型的错误
+      if (error.response?.data?.msg) {
+        ElMessage.error(error.response.data.msg)
+      } else if (error.message) {
+        ElMessage.error(`批量删除失败: ${error.message}`)
+      } else {
+        ElMessage.error('批量删除科室失败，请稍后重试')
+      }
     }
   }).catch(() => {
     ElMessage.info('已取消删除')
@@ -1615,6 +2035,114 @@ $border: #ebeef5;
       
       .department-table {
         min-width: 800px;
+      }
+    }
+  }
+}
+
+// 详情弹窗样式
+.detail-modal {
+  max-width: 800px;
+  
+  .detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 24px;
+    
+    .detail-section {
+      background: #f8f9fc;
+      border-radius: 12px;
+      padding: 20px;
+      
+      &.full-width {
+        grid-column: 1 / -1;
+      }
+      
+      h4 {
+        margin: 0 0 16px 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: $text;
+        border-bottom: 2px solid $primary;
+        padding-bottom: 8px;
+      }
+      
+      .detail-row {
+        display: flex;
+        align-items: center;
+        margin-bottom: 12px;
+        
+        &:last-child {
+          margin-bottom: 0;
+        }
+        
+        .label {
+          font-weight: 500;
+          color: #666;
+          min-width: 100px;
+          flex-shrink: 0;
+        }
+        
+        .value {
+          color: $text;
+          font-weight: 500;
+          
+          &.code {
+            font-family: 'Courier New', monospace;
+            background: rgba($primary, 0.1);
+            padding: 2px 8px;
+            border-radius: 4px;
+            color: $primary;
+          }
+          
+          &.count {
+            font-size: 18px;
+            font-weight: 600;
+            color: $primary;
+          }
+          
+          .title-badge {
+            background: rgba($warning, 0.1);
+            color: $warning;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+          }
+        }
+      }
+      
+      .description-content {
+        background: white;
+        padding: 16px;
+        border-radius: 8px;
+        border: 1px solid $border;
+        line-height: 1.6;
+        color: #666;
+        min-height: 80px;
+      }
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .detail-modal {
+    .detail-grid {
+      grid-template-columns: 1fr;
+      gap: 16px;
+      
+      .detail-section {
+        padding: 16px;
+        
+        .detail-row {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 4px;
+          
+          .label {
+            min-width: auto;
+          }
+        }
       }
     }
   }

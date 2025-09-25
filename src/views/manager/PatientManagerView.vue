@@ -124,17 +124,10 @@
            </div>
            
            <div class="filter-controls">
-             <select v-model="selectedStatus" @change="handleFilter" class="filter-select">
-               <option value="">全部状态</option>
-               <option value="active">活跃</option>
-               <option value="inactive">非活跃</option>
-               <option value="critical">重点关注</option>
-             </select>
-             
              <select v-model="selectedGender" @change="handleFilter" class="filter-select">
                <option value="">全部性别</option>
-               <option value="male">男</option>
-               <option value="female">女</option>
+               <option value="男">男</option>
+               <option value="女">女</option>
              </select>
 
              <button class="clear-search-btn" @click="clearAllSearch" title="清空搜索">
@@ -152,7 +145,7 @@
            <div class="list-header">
              <h2>患者列表</h2>
              <div class="list-info">
-               共 {{ filteredPatients.length }} 位患者
+               共 {{ totalPatients }} 位患者
                <span v-if="selectedPatients.length > 0" class="selected-info">
                  ，已选择 {{ selectedPatients.length }} 位
                </span>
@@ -160,7 +153,7 @@
            </div>
 
           <!-- 患者表格 -->
-          <div class="patient-table-wrapper">
+          <div class="patient-table-wrapper" v-loading="loading">
             <table class="patient-table">
               <thead>
                 <tr>
@@ -174,7 +167,7 @@
                   <th>联系方式</th>
                   <th>地址</th>
                   <th>身份证号</th>
-                  <th>状态</th>
+                  <th>备注</th>
                   <th>操作</th>
                 </tr>
               </thead>
@@ -189,23 +182,22 @@
                     >
                   </td>
                   <td @click="viewPatientDetail(patient)">
-                    <div class="card-number">{{ generateCardNumber(patient.id) }}</div>
+                    <div class="card-number">{{ patient.patientId || patient.patient_id || generateCardNumber(patient.id) }}</div>
                   </td>
                   <td @click="viewPatientDetail(patient)">
                     <div class="patient-name-cell">
                       <div class="patient-avatar-small">{{ patient.name.charAt(0) }}</div>
                       <div>
                         <div class="patient-name">{{ patient.name }}</div>
-                        <div class="patient-meta">ID: {{ patient.id }}</div>
                       </div>
                     </div>
                   </td>
                   <td @click="viewPatientDetail(patient)">
-                    <span class="gender-badge" :class="patient.gender">
-                      {{ patient.gender === 'male' ? '男' : '女' }}
+                    <span class="gender-badge" :class="genderClass(patient.gender)">
+                      {{ patient.gender }}
                     </span>
                   </td>
-                  <td @click="viewPatientDetail(patient)">{{ patient.age }}岁</td>
+                  <td @click="viewPatientDetail(patient)">{{ calculateAge(patient.birthDate) }}岁</td>
                   <td @click="viewPatientDetail(patient)">
                     <div class="contact-info">
                       <div class="phone">{{ patient.phone }}</div>
@@ -220,10 +212,8 @@
                     <span class="id-card">{{ maskIdCard(patient.idCard) }}</span>
                   </td>
                   <td @click="viewPatientDetail(patient)">
-                    <span class="status-badge" :class="patient.status">
-                      <span v-if="patient.status === 'active'">活跃</span>
-                      <span v-else-if="patient.status === 'inactive'">非活跃</span>
-                      <span v-else>重点关注</span>
+                    <span class="remark-info" :title="patient.remark">
+                      {{ patient.remark || '无备注' }}
                     </span>
                   </td>
                   <td>
@@ -286,6 +276,10 @@
         <div class="modal-body">
           <div class="form-grid">
             <div class="form-group">
+              <label>就诊卡号</label>
+              <input v-model="newPatient.patientId" type="text" placeholder="例如：HOS2025000001">
+            </div>
+            <div class="form-group">
               <label>患者姓名 <span class="required">*</span></label>
               <input v-model="newPatient.name" type="text" placeholder="请输入患者姓名">
             </div>
@@ -293,13 +287,13 @@
               <label>性别 <span class="required">*</span></label>
               <select v-model="newPatient.gender">
                 <option value="">请选择</option>
-                <option value="male">男</option>
-                <option value="female">女</option>
+                <option value="男">男</option>
+                <option value="女">女</option>
               </select>
             </div>
             <div class="form-group">
-              <label>年龄 <span class="required">*</span></label>
-              <input v-model="newPatient.age" type="number" placeholder="请输入年龄" min="0" max="150">
+              <label>出生日期</label>
+              <input v-model="newPatient.birthDate" type="date" placeholder="请选择出生日期">
             </div>
             <div class="form-group">
               <label>身份证号</label>
@@ -315,13 +309,117 @@
             </div>
             <div class="form-group full-width">
               <label>备注</label>
-              <textarea v-model="newPatient.remarks" placeholder="请输入备注信息" rows="3"></textarea>
+              <textarea v-model="newPatient.remark" placeholder="请输入备注信息" rows="3"></textarea>
             </div>
           </div>
         </div>
         <div class="modal-footer">
           <button class="action-btn outline" @click="closeAddPatientModal">取消</button>
           <button class="action-btn primary" @click="addPatient">确认添加</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 患者详情弹窗 -->
+    <div v-if="showDetailModal" class="modal-overlay" @click="showDetailModal = false">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h3>患者详情</h3>
+          <button class="close-btn" @click="showDetailModal = false">×</button>
+        </div>
+        <div class="modal-body" v-loading="detailLoading">
+          <div v-if="patientDetail" class="form-grid">
+            <div class="form-group">
+              <label>就诊卡号</label>
+              <input type="text" :value="patientDetail.patientId || patientDetail.patient_id || '-'" disabled>
+            </div>
+            <div class="form-group">
+              <label>患者姓名</label>
+              <input type="text" :value="patientDetail.name" disabled>
+            </div>
+            <div class="form-group">
+              <label>性别</label>
+              <input type="text" :value="patientDetail.gender" disabled>
+            </div>
+            <div class="form-group">
+              <label>出生日期</label>
+              <input type="text" :value="patientDetail.birthDate || '-'" disabled>
+            </div>
+            <div class="form-group">
+              <label>身份证号</label>
+              <input type="text" :value="patientDetail.idCard || '-'" disabled>
+            </div>
+            <div class="form-group">
+              <label>手机号</label>
+              <input type="text" :value="patientDetail.phone || '-'" disabled>
+            </div>
+            <div class="form-group">
+              <label>地址</label>
+              <input type="text" :value="patientDetail.address || '-'" disabled>
+            </div>
+            <div class="form-group full-width">
+              <label>备注</label>
+              <textarea :value="patientDetail.remark || '-'" rows="3" disabled />
+            </div>
+          </div>
+          <div v-else-if="!detailLoading" style="padding: 24px; text-align: center; color: #666;">暂无数据</div>
+        </div>
+        <div class="modal-footer">
+          <button class="action-btn outline" @click="showDetailModal = false">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 编辑患者弹窗 -->
+    <div v-if="showEditModal" class="modal-overlay" @click="closeEditModal">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h3>编辑患者</h3>
+          <button class="close-btn" @click="closeEditModal">×</button>
+        </div>
+        <div class="modal-body" v-loading="editLoading">
+          <div class="form-grid">
+            <div class="form-group">
+              <label>就诊卡号</label>
+              <input v-model="editPatientData.patientId" type="text" placeholder="例如：HOS2025000001">
+            </div>
+            <div class="form-group">
+              <label>患者姓名 <span class="required">*</span></label>
+              <input v-model="editPatientData.name" type="text" placeholder="请输入患者姓名">
+            </div>
+            <div class="form-group">
+              <label>性别 <span class="required">*</span></label>
+              <select v-model="editPatientData.gender">
+                <option value="">请选择</option>
+                <option value="男">男</option>
+                <option value="女">女</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>出生日期</label>
+              <input v-model="editPatientData.birthDate" type="date" placeholder="请选择出生日期">
+            </div>
+            <div class="form-group">
+              <label>身份证号</label>
+              <input v-model="editPatientData.idCard" type="text" placeholder="请输入身份证号">
+            </div>
+            <div class="form-group">
+              <label>手机号 <span class="required">*</span></label>
+              <input v-model="editPatientData.phone" type="text" placeholder="请输入手机号">
+            </div>
+            <div class="form-group">
+              <label>地址</label>
+              <input v-model="editPatientData.address" type="text" placeholder="请输入地址">
+            </div>
+            <div class="form-group full-width">
+              <label>备注</label>
+              <textarea v-model="editPatientData.remark" placeholder="请输入备注信息" rows="3"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="action-btn outline" @click="closeEditModal">取消</button>
+          <button class="action-btn primary" @click="updatePatientInfo">保存修改</button>
         </div>
       </div>
     </div>
@@ -335,6 +433,7 @@ import { useStore } from 'vuex'
 import { ElNotification, ElMessage, ElMessageBox } from 'element-plus'
 import SideLeft from '@/components/manager/SideLeft.vue'
 import AdminHeader from '@/components/manager/AdminHeader.vue'
+import { searchPatients, createPatient, getPatientDetail, updatePatient, deletePatient as deletePatientApi } from '@/api/patients'
 
 // 状态管理
 const searchByName = ref('')
@@ -343,184 +442,121 @@ const searchByPhone = ref('')
 const selectedStatus = ref('')
 const selectedGender = ref('')
 const currentPage = ref(1)
-const pageSize = 10
+const pageSize = ref(10)
 const selectedPatients = ref([])
 const showAddModal = ref(false)
+const loading = ref(false)
+
+// 详情弹窗状态
+const showDetailModal = ref(false)
+const detailLoading = ref(false)
+const patientDetail = ref(null)
+
+// 编辑弹窗状态
+const showEditModal = ref(false)
+const editLoading = ref(false)
+const editPatientData = ref({
+  id: '',
+  patientId: '',
+  name: '',
+  gender: '',
+  birthDate: '',
+  idCard: '',
+  phone: '',
+  address: '',
+  remark: ''
+})
+
+// API数据状态
+const patientList = ref([])
+const totalCount = ref(0)
+const totalPages = ref(0)
 
 const store = useStore()
 const router = useRouter()
 
 // 新患者表单数据
 const newPatient = ref({
+  patientId: '',
   name: '',
   gender: '',
-  age: '',
+  birthDate: '',
   idCard: '',
   phone: '',
   address: '',
-  remarks: ''
+  remark: ''
 })
 
-// 模拟患者数据
-const patientList = ref([
-  {
-    id: 1,
-    name: '张三',
-    gender: 'male',
-    age: 32,
-    idCard: '110101199001011234',
-    phone: '13800138001',
-    address: '北京市朝阳区',
-    lastVisit: '2025-09-15',
-    visitCount: 5,
-    status: 'active',
-    remarks: '高血压患者，定期复查'
-  },
-  {
-    id: 2,
-    name: '李四',
-    gender: 'female',
-    age: 28,
-    idCard: '110101199201011234',
-    phone: '13800138002',
-    address: '北京市海淀区',
-    lastVisit: '2025-09-18',
-    visitCount: 3,
-    status: 'active',
-    remarks: '孕期检查'
-  },
-  {
-    id: 3,
-    name: '王五',
-    gender: 'male',
-    age: 45,
-    idCard: '110101197801011234',
-    phone: '13800138003',
-    address: '北京市西城区',
-    lastVisit: '2025-08-20',
-    visitCount: 12,
-    status: 'inactive',
-    remarks: '糖尿病患者'
-  },
-  {
-    id: 4,
-    name: '赵六',
-    gender: 'female',
-    age: 35,
-    idCard: '110101198801011234',
-    phone: '13800138004',
-    address: '北京市东城区',
-    lastVisit: '2025-09-19',
-    visitCount: 8,
-    status: 'critical',
-    remarks: '心脏病患者，需密切关注'
-  },
-  {
-    id: 5,
-    name: '钱七',
-    gender: 'male',
-    age: 55,
-    idCard: '110101196801011234',
-    phone: '13800138005',
-    address: '北京市丰台区',
-    lastVisit: '2025-09-10',
-    visitCount: 15,
-    status: 'active',
-    remarks: '慢性胃炎'
-  },
-  {
-    id: 6,
-    name: '孙八',
-    gender: 'female',
-    age: 42,
-    idCard: '110101198101011234',
-    phone: '13800138006',
-    address: '北京市石景山区',
-    lastVisit: '2025-09-12',
-    visitCount: 6,
-    status: 'inactive',
-    remarks: '颈椎病患者'
-  },
-  {
-    id: 7,
-    name: '周九',
-    gender: 'male',
-    age: 38,
-    idCard: '110101198501011234',
-    phone: '13800138007',
-    address: '北京市通州区',
-    lastVisit: '2025-09-17',
-    visitCount: 4,
-    status: 'active',
-    remarks: '腰椎间盘突出'
-  },
-  {
-    id: 8,
-    name: '吴十',
-    gender: 'female',
-    age: 29,
-    idCard: '110101199401011234',
-    phone: '13800138008',
-    address: '北京市大兴区',
-    lastVisit: '2025-09-16',
-    visitCount: 2,
-    status: 'active',
-    remarks: '皮肤过敏'
+// 获取患者列表
+const fetchPatients = async () => {
+  try {
+    loading.value = true
+    console.log('📋 获取患者列表，参数:', {
+      page: currentPage.value,
+      size: pageSize.value,
+      name: searchByName.value || undefined,
+      idCard: searchByIdCard.value || undefined,
+      phone: searchByPhone.value || undefined
+    })
+    
+    const params = {
+      page: currentPage.value,
+      size: pageSize.value
+    }
+    
+    // 只有非空搜索条件才添加到参数中
+    if (searchByName.value.trim()) {
+      params.name = searchByName.value.trim()
+    }
+    if (searchByIdCard.value.trim()) {
+      params.idCard = searchByIdCard.value.trim()
+    }
+    if (searchByPhone.value.trim()) {
+      params.phone = searchByPhone.value.trim()
+    }
+    
+    const response = await searchPatients(params)
+    console.log('患者列表响应:', response)
+    
+    if (response.code === 200) {
+      const data = response.data
+      patientList.value = data.list || []
+      totalCount.value = data.totalCount || 0
+      totalPages.value = data.totalPage || 0
+      
+      console.log('📋 患者数据更新:', {
+        list: patientList.value.length,
+        totalCount: totalCount.value,
+        totalPages: totalPages.value,
+        samplePatient: patientList.value[0] // 显示第一个患者的完整数据结构
+      })
+    } else {
+      ElMessage.error(response.msg || '获取患者列表失败')
+      patientList.value = []
+      totalCount.value = 0
+      totalPages.value = 0
+    }
+  } catch (error) {
+    console.error('获取患者列表失败:', error)
+    ElMessage.error('获取患者列表失败，请稍后重试')
+    patientList.value = []
+    totalCount.value = 0
+    totalPages.value = 0
+  } finally {
+    loading.value = false
   }
-])
+}
 
 // 计算属性
-const filteredPatients = computed(() => {
-  let filtered = patientList.value
-
-  // 按姓名搜索
-  if (searchByName.value) {
-    const query = searchByName.value.toLowerCase()
-    filtered = filtered.filter(patient => 
-      patient.name.toLowerCase().includes(query)
-    )
-  }
-
-  // 按身份证号搜索
-  if (searchByIdCard.value) {
-    const query = searchByIdCard.value
-    filtered = filtered.filter(patient => 
-      patient.idCard.includes(query)
-    )
-  }
-
-  // 按手机号搜索
-  if (searchByPhone.value) {
-    const query = searchByPhone.value
-    filtered = filtered.filter(patient => 
-      patient.phone.includes(query)
-    )
-  }
-
-  // 状态过滤
-  if (selectedStatus.value) {
-    filtered = filtered.filter(patient => patient.status === selectedStatus.value)
-  }
-
-  // 性别过滤
-  if (selectedGender.value) {
-    filtered = filtered.filter(patient => patient.gender === selectedGender.value)
-  }
-
-  return filtered
-})
-
 const paginatedPatients = computed(() => {
-  const start = (currentPage.value - 1) * pageSize
-  const end = start + pageSize
-  return filteredPatients.value.slice(start, end)
+  // 直接返回API获取的当前页数据
+  return patientList.value
 })
 
-const totalPatients = computed(() => patientList.value.length)
-const todayNewPatients = computed(() => 2) // 模拟数据
-const pendingFollowUp = computed(() => patientList.value.filter(p => p.status === 'inactive').length)
-const criticalPatients = computed(() => patientList.value.filter(p => p.status === 'critical').length)
-const totalPages = computed(() => Math.ceil(filteredPatients.value.length / pageSize))
+const totalPatients = computed(() => totalCount.value)
+const todayNewPatients = computed(() => 2) // 模拟数据，可以后续从API获取
+const pendingFollowUp = computed(() => patientList.value.filter(p => p.remark && p.remark.includes('复诊')).length)
+const criticalPatients = computed(() => patientList.value.filter(p => p.remark && (p.remark.includes('重点') || p.remark.includes('关注'))).length)
 
 const isAllSelected = computed(() => {
   return paginatedPatients.value.length > 0 && 
@@ -580,24 +616,27 @@ const logout = () => {
 
 const handleSearch = () => {
   currentPage.value = 1
+  fetchPatients()
 }
 
 const handleFilter = () => {
   currentPage.value = 1
+  fetchPatients()
 }
 
 const clearAllSearch = () => {
   searchByName.value = ''
   searchByIdCard.value = ''
   searchByPhone.value = ''
-  selectedStatus.value = ''
   selectedGender.value = ''
   currentPage.value = 1
+  fetchPatients()
 }
 
 const changePage = (page) => {
   if (typeof page === 'number') {
     currentPage.value = page
+    fetchPatients()
   }
 }
 
@@ -607,13 +646,46 @@ const maskIdCard = (idCard) => {
 }
 
 const generateCardNumber = (id) => {
+  if (!id) return '-'
   // 生成就诊卡号：HOS + 年份 + 6位数字ID
   const year = new Date().getFullYear()
   const paddedId = String(id).padStart(6, '0')
   return `HOS${year}${paddedId}`
 }
 
+// 新增患者时生成一个建议的就诊卡号（可编辑）
+const generatePatientIdForNew = () => {
+  const year = new Date().getFullYear()
+  const rand = Math.floor(Math.random() * 1000000).toString().padStart(6, '0')
+  return `HOS${year}${rand}`
+}
+
+const calculateAge = (birthDate) => {
+  if (!birthDate) return '-'
+  const birth = new Date(birthDate)
+  const today = new Date()
+  let age = today.getFullYear() - birth.getFullYear()
+  const monthDiff = today.getMonth() - birth.getMonth()
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+    age--
+  }
+  return age
+}
+
+// 性别样式映射：后端返回 '男'/'女'，也兼容 'male'/'female'
+const genderClass = (gender) => {
+  if (!gender) return ''
+  const g = typeof gender === 'string' ? gender.trim() : ''
+  if (g === '男' || g.toLowerCase?.() === 'male' || g === 'M') return 'male'
+  if (g === '女' || g.toLowerCase?.() === 'female' || g === 'F') return 'female'
+  return ''
+}
+
 const showAddPatientModal = () => {
+  // 打开时预填一个可编辑的就诊卡号
+  if (!newPatient.value.patientId) {
+    newPatient.value.patientId = generatePatientIdForNew()
+  }
   showAddModal.value = true
 }
 
@@ -621,59 +693,190 @@ const closeAddPatientModal = () => {
   showAddModal.value = false
   // 重置表单
   newPatient.value = {
+    patientId: '',
     name: '',
     gender: '',
-    age: '',
+    birthDate: '',
     idCard: '',
     phone: '',
     address: '',
-    remarks: ''
+    remark: ''
   }
 }
 
-const addPatient = () => {
-  // 简单验证
-  if (!newPatient.value.name || !newPatient.value.gender || !newPatient.value.age || !newPatient.value.phone) {
-    ElMessage.warning('请填写必要信息（姓名、性别、年龄、手机号）')
+const addPatient = async () => {
+  // 基本校验
+  if (!newPatient.value.name || !newPatient.value.gender || !newPatient.value.phone) {
+    ElMessage.warning('请填写必要信息（姓名、性别、手机号）')
     return
   }
 
-  // 手机号格式验证
+  // 手机号格式验证（中国大陆手机号）
   const phoneRegex = /^1[3-9]\d{9}$/
   if (!phoneRegex.test(newPatient.value.phone)) {
     ElMessage.warning('请输入正确的手机号格式')
     return
   }
 
-  // 添加新患者
-  const patient = {
-    id: Date.now(),
-    ...newPatient.value,
-    age: parseInt(newPatient.value.age),
-    lastVisit: new Date().toISOString().split('T')[0],
-    visitCount: 0,
-    status: 'active'
+  // 组装请求参数，按后端字段
+  const payload = {
+    patientId: newPatient.value.patientId ? newPatient.value.patientId.trim() : generatePatientIdForNew(),
+    name: newPatient.value.name.trim(),
+    gender: newPatient.value.gender, // '男' | '女'
+    idCard: newPatient.value.idCard ? newPatient.value.idCard.trim() : undefined,
+    birthDate: newPatient.value.birthDate || undefined,
+    phone: newPatient.value.phone.trim(),
+    address: newPatient.value.address ? newPatient.value.address.trim() : undefined,
+    remark: newPatient.value.remark ? newPatient.value.remark.trim() : undefined
   }
 
-  patientList.value.unshift(patient)
-  
-  ElNotification({
-    title: '添加成功',
-    message: `患者 ${patient.name} 已成功添加`,
-    type: 'success'
-  })
-
-  closeAddPatientModal()
+  try {
+    loading.value = true
+    console.log('🆕 创建患者 payload:', payload)
+    const resp = await createPatient(payload)
+    console.log('创建患者响应:', resp)
+    if (resp && resp.code === 200) {
+      ElNotification({
+        title: '添加成功',
+        message: `患者 ${payload.name} 已创建`,
+        type: 'success'
+      })
+      closeAddPatientModal()
+      // 刷新列表到第一页，便于看到新数据
+      currentPage.value = 1
+      await fetchPatients()
+    } else {
+      ElMessage.error(resp?.msg || '创建患者失败')
+    }
+  } catch (err) {
+    console.error('创建患者失败:', err)
+    ElMessage.error('创建患者失败，请稍后重试')
+  } finally {
+    loading.value = false
+  }
 }
 
-const editPatient = (patient) => {
-  ElMessage.info(`编辑患者：${patient.name}`)
-  // 实现编辑功能
+const editPatient = async (patient) => {
+  // 获取详情以回显
+  const id = patient?.id
+  if (!id) {
+    ElMessage.error('无法获取患者ID')
+    return
+  }
+  editLoading.value = true
+  showEditModal.value = true
+  try {
+    const resp = await getPatientDetail(id)
+    if (resp && resp.code === 200 && resp.data) {
+      const d = resp.data
+      editPatientData.value = {
+        id: d.id,
+        patientId: d.patientId || d.patient_id || '',
+        name: d.name || '',
+        gender: d.gender || '',
+        birthDate: d.birthDate || '',
+        idCard: d.idCard || '',
+        phone: d.phone || '',
+        address: d.address || '',
+        remark: d.remark || ''
+      }
+    } else {
+      showEditModal.value = false
+      ElMessage.error(resp?.msg || '获取患者详情失败')
+    }
+  } catch (e) {
+    console.error('获取患者详情失败:', e)
+    showEditModal.value = false
+    ElMessage.error('获取患者详情失败，请稍后重试')
+  } finally {
+    editLoading.value = false
+  }
+}
+
+const closeEditModal = () => {
+  showEditModal.value = false
+  editPatientData.value = {
+    id: '', patientId: '', name: '', gender: '', birthDate: '', idCard: '', phone: '', address: '', remark: ''
+  }
+}
+
+const updatePatientInfo = async () => {
+  // 基本校验
+  const p = editPatientData.value
+  if (!p.id) {
+    ElMessage.error('缺少患者ID')
+    return
+  }
+  if (!p.name || !p.gender || !p.phone) {
+    ElMessage.warning('请完整填写必填项（姓名、性别、手机号）')
+    return
+  }
+  const phoneRegex = /^1[3-9]\d{9}$/
+  if (!phoneRegex.test(p.phone)) {
+    ElMessage.warning('请输入正确的手机号格式')
+    return
+  }
+
+  // 组装payload
+  const payload = {
+    id: p.id,
+    patientId: p.patientId ? String(p.patientId).trim() : undefined,
+    name: p.name.trim(),
+    gender: p.gender,
+    idCard: p.idCard ? p.idCard.trim() : undefined,
+    birthDate: p.birthDate || undefined,
+    phone: p.phone.trim(),
+    address: p.address ? p.address.trim() : undefined,
+    remark: p.remark ? p.remark.trim() : undefined
+  }
+
+  try {
+    editLoading.value = true
+    const resp = await updatePatient(payload)
+    if (resp && resp.code === 200) {
+      ElNotification({ title: '更新成功', message: `患者 ${payload.name} 信息已更新`, type: 'success' })
+      closeEditModal()
+      // 刷新当前页
+      await fetchPatients()
+    } else {
+      ElMessage.error(resp?.msg || '更新失败')
+    }
+  } catch (e) {
+    console.error('更新患者失败:', e)
+    ElMessage.error('更新患者失败，请稍后重试')
+  } finally {
+    editLoading.value = false
+  }
 }
 
 const viewPatientDetail = (patient) => {
-  ElMessage.info(`查看患者详情：${patient.name}`)
-  // 跳转到患者详情页面
+  // 打开详情弹窗并加载详情
+  showDetailModal.value = true
+  detailLoading.value = true
+  patientDetail.value = null
+  const id = patient?.id
+  if (!id) {
+    detailLoading.value = false
+    ElMessage.error('无法获取患者ID')
+    return
+  }
+  ;(async () => {
+    try {
+      const resp = await getPatientDetail(id)
+      if (resp && resp.code === 200) {
+        patientDetail.value = resp.data
+      } else {
+        ElMessage.error(resp?.msg || '获取患者详情失败')
+        showDetailModal.value = false
+      }
+    } catch (e) {
+      console.error('获取患者详情失败:', e)
+      ElMessage.error('获取患者详情失败，请稍后重试')
+      showDetailModal.value = false
+    } finally {
+      detailLoading.value = false
+    }
+  })()
 }
 
 const viewMedicalRecord = (patient) => {
@@ -734,34 +937,36 @@ const confirmDeletePatient = (patient) => {
       confirmButtonClass: 'el-button--danger'
     }
   ).then(() => {
-    deletePatient(patient.id)
+    deletePatientById(patient.id)
   }).catch(() => {
     ElMessage.info('已取消删除')
   })
 }
 
-const deletePatient = (patientId) => {
-  const index = patientList.value.findIndex(p => p.id === patientId)
-  if (index > -1) {
-    const deletedPatient = patientList.value[index]
-    patientList.value.splice(index, 1)
-    
-    // 从选中列表中移除
-    const selectedIndex = selectedPatients.value.indexOf(patientId)
-    if (selectedIndex > -1) {
-      selectedPatients.value.splice(selectedIndex, 1)
+const deletePatientById = async (patientId) => {
+  if (!patientId) return
+  try {
+    loading.value = true
+    const resp = await deletePatientApi(patientId)
+    if (resp && resp.code === 200) {
+      ElNotification({ title: '删除成功', message: '患者已删除', type: 'success' })
+      // 从选中列表中移除
+      const idx = selectedPatients.value.indexOf(patientId)
+      if (idx > -1) selectedPatients.value.splice(idx, 1)
+      // 若当前页无数据，回到第一页
+      await fetchPatients()
+      if (patientList.value.length === 0 && currentPage.value > 1) {
+        currentPage.value = 1
+        await fetchPatients()
+      }
+    } else {
+      ElMessage.error(resp?.msg || '删除失败')
     }
-    
-    ElNotification({
-      title: '删除成功',
-      message: `患者 ${deletedPatient.name} 已被删除`,
-      type: 'success'
-    })
-    
-    // 如果当前页没有数据且不是第一页，跳转到上一页
-    if (paginatedPatients.value.length === 0 && currentPage.value > 1) {
-      currentPage.value--
-    }
+  } catch (e) {
+    console.error('删除患者失败:', e)
+    ElMessage.error('删除患者失败，请稍后重试')
+  } finally {
+    loading.value = false
   }
 }
 
@@ -780,22 +985,28 @@ const batchDeletePatients = () => {
       type: 'warning',
       confirmButtonClass: 'el-button--danger'
     }
-  ).then(() => {
-    const deletedCount = selectedPatients.value.length
-    
-    // 删除选中的患者
-    patientList.value = patientList.value.filter(p => !selectedPatients.value.includes(p.id))
-    selectedPatients.value = []
-    
-    ElNotification({
-      title: '批量删除成功',
-      message: `已删除 ${deletedCount} 位患者`,
-      type: 'success'
-    })
-    
-    // 调整页码
-    if (paginatedPatients.value.length === 0 && currentPage.value > 1) {
-      currentPage.value = 1
+  ).then(async () => {
+    const ids = [...selectedPatients.value]
+    try {
+      loading.value = true
+      const resp = await deletePatientApi(ids)
+      if (resp && resp.code === 200) {
+        ElNotification({ title: '批量删除成功', message: `已删除 ${ids.length} 位患者`, type: 'success' })
+        selectedPatients.value = []
+        // 刷新列表
+        await fetchPatients()
+        if (patientList.value.length === 0 && currentPage.value > 1) {
+          currentPage.value = 1
+          await fetchPatients()
+        }
+      } else {
+        ElMessage.error(resp?.msg || '批量删除失败')
+      }
+    } catch (e) {
+      console.error('批量删除失败:', e)
+      ElMessage.error('批量删除失败，请稍后重试')
+    } finally {
+      loading.value = false
     }
   }).catch(() => {
     ElMessage.info('已取消删除')
@@ -814,6 +1025,12 @@ const handleProfileClick = () => {
 const handleSettingsClick = () => {
   ElMessage.info('设置功能开发中...')
 }
+
+// 生命周期
+onMounted(() => {
+  // 页面加载时获取患者列表
+  fetchPatients()
+})
 
 </script>
 
@@ -1246,6 +1463,18 @@ $border: #ebeef5;
                font-family: 'Courier New', monospace;
                font-size: 12px;
                color: #666;
+               letter-spacing: 1px;
+             }
+
+             // 备注信息
+             .remark-info {
+               font-size: 12px;
+               color: #666;
+               max-width: 120px;
+               overflow: hidden;
+               text-overflow: ellipsis;
+               white-space: nowrap;
+               display: inline-block;
              }
 
             // 状态标签

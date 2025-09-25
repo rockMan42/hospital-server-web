@@ -77,18 +77,18 @@ const props = defineProps({
 
 // 核心功能菜单项 - 护士专业功能
 const coreMenuItems = ref([
-  { name: '护士工作台', path: '/nursehome', icon: '🏥', key: 'workbench' },
-  { name: '患者护理', path: '/patientcare', icon: '👩‍⚕️', key: 'patientcare' },
-  { name: '病房管理', path: '/wardmanager', icon: '🏨', key: 'ward' },
-  { name: '用药管理', path: '/medicationmanager', icon: '💊', key: 'medication' },
-  { name: '护理记录', path: '/nursingrecord', icon: '📋', key: 'record' },
-  { name: '护理统计', path: '/nursingstatistic', icon: '📊', key: 'statistics' }
+  { name: '护士工作台', path: '/nurse/home', icon: '🏥', key: 'workbench' },
+  { name: '患者护理', path: '/nurse/patientcare', icon: '👩‍⚕️', key: 'patientcare' },
+  { name: '病房管理', path: '/nurse/wardmanager', icon: '🏨', key: 'ward' },
+  { name: '用药管理', path: '/nurse/medicationmanager', icon: '💊', key: 'medication' },
+  { name: '护理记录', path: '/nurse/nursingrecord', icon: '📋', key: 'record' },
+  { name: '护理统计', path: '/nurse/nursingstatistic', icon: '📊', key: 'statistics' }
 ])
 
 // 系统设置菜单项
 const systemMenuItems = ref([
-  { name: '账户设置', path: '/settings', icon: '⚙️', key: 'settings' },
-  { name: '帮助中心', path: '/help', icon: '❓', key: 'help' }
+  { name: '账户设置', path: '/nurse/settings', icon: '⚙️', key: 'settings' },
+  { name: '帮助中心', path: '/nurse/help', icon: '❓', key: 'help' }
 ])
 
 // 当前路由路径

@@ -78,24 +78,24 @@
   
   // 核心功能菜单项
   const coreMenuItems = ref([
-    { name: '工作台', path: '/manager', icon: '🏠', key: 'dashboard' },
-    { name: '科室管理', path: '/departmentmanager', icon: '🏥', key: 'department' },
-    { name: '诊室管理', path: '/clinicroommanager', icon: '🚪', key: 'clinicroom' },
-    { name: '医生管理', path: '/doctormanager', icon: '👨‍⚕️', key: 'doctor' },
-    { name: '护士管理', path: '/nursemanager', icon: '👩‍⚕️', key: 'nurse' },
-    { name: '患者管理', path: '/mpatientmanager', icon: '👥', key: 'patient' },
-    { name: '预约管理', path: '/myuyuemanager', icon: '📅', key: 'appointment' },
-    { name: '门诊日程', path: '/schedule', icon: '🗓️', key: 'schedule' },
-    { name: '窗口挂号', path: '/registration', icon: '🧾', key: 'registration' },
-    { name: '出诊管理', path: '/outpatientmanager', icon: '👨‍⚕️', key: 'outpatient' }
+    { name: '工作台', path: '/manager/home', icon: '🏠', key: 'dashboard' },
+    { name: '科室管理', path: '/manager/department', icon: '🏥', key: 'department' },
+    { name: '诊室管理', path: '/manager/clinicroom', icon: '🚪', key: 'clinicroom' },
+    { name: '医生管理', path: '/manager/doctor', icon: '👨‍⚕️', key: 'doctor' },
+    { name: '护士管理', path: '/manager/nurse', icon: '👩‍⚕️', key: 'nurse' },
+    { name: '患者管理', path: '/manager/patient', icon: '👥', key: 'patient' },
+    { name: '预约管理', path: '/manager/reservation', icon: '📅', key: 'appointment' },
+    { name: '门诊日程', path: '/manager/schedule', icon: '🗓️', key: 'schedule' },
+    { name: '窗口挂号', path: '/manager/registration', icon: '🧾', key: 'registration' },
+    { name: '出诊管理', path: '/manager/outpatient', icon: '👨‍⚕️', key: 'outpatient' }
   ])
   
   // 系统管理菜单项
   const systemMenuItems = ref([
-    { name: '系统设置', path: '/settings', icon: '⚙️', key: 'settings' },
-    { name: '数据统计', path: '/statistics', icon: '📊', key: 'statistics' },
-    { name: '日志管理', path: '/logs', icon: '📝', key: 'logs' },
-    { name: '帮助中心', path: '/help', icon: '❓', key: 'help' }
+    { name: '系统设置', path: '/manager/settings', icon: '⚙️', key: 'settings' },
+    { name: '数据统计', path: '/manager/statistics', icon: '📊', key: 'statistics' },
+    { name: '日志管理', path: '/manager/logs', icon: '📝', key: 'logs' },
+    { name: '帮助中心', path: '/manager/help', icon: '❓', key: 'help' }
   ])
   
   // 当前路由路径 - 修复路由激活判断逻辑

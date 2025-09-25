@@ -45,3 +45,29 @@ export const searchPatients = (params) => {
 export const createPatient = (payload) => {
   return http.post('/hospital/patient/createPatient', payload);
 };
+
+/**
+ * 获取患者详情
+ * @param {number|string} id 患者ID
+ * @returns Promise<{code:number,msg:string,data:object}>
+ */
+export const getPatientDetail = (id) => {
+  return http.post('/hospital/patient/getPatientDetail', { id });
+};
+
+/**
+ * 更新患者信息
+ * @param {Object} payload { id, name, gender, idCard, birthDate, phone, address, remark, patientId }
+ */
+export const updatePatient = (payload) => {
+  return http.post('/hospital/patient/updatePatient', payload);
+};
+
+/**
+ * 删除患者（支持单个或批量）
+ * @param {number|number[]} ids 患者ID或ID数组
+ */
+export const deletePatient = (ids) => {
+  const payload = { ids: Array.isArray(ids) ? ids : [ids] };
+  return http.post('/hospital/patient/deletePatient', payload);
+};
