@@ -202,7 +202,10 @@
                   </td>
                   <td @click="viewDoctorDetail(doctor)">
                     <div class="doctor-name-cell">
-                      <div class="doctor-avatar">{{ doctor.name.charAt(0) }}</div>
+                      <img v-if="doctor.avatar" :src="getAvatarUrl(doctor.avatar)" class="doctor-avatar-img" alt="avatar" 
+                           @load="console.log('✅ 头像加载成功:', doctor.name, getAvatarUrl(doctor.avatar))"
+                           @error="console.error('❌ 头像加载失败:', doctor.name, getAvatarUrl(doctor.avatar))" />
+                      <div v-else class="doctor-avatar">{{ doctor.name.charAt(0) }}</div>
                       <div>
                         <div class="doctor-name">{{ doctor.name }}</div>
                         <div class="doctor-meta">工号: {{ doctor.workId }}</div>
@@ -341,6 +344,17 @@
                 <option :value="2">停职</option>
               </select>
             </div>
+            <div class="form-group">
+              <label>头像上传</label>
+              <input type="file" accept="image/*" @change="handleAvatarFileChange" />
+              <div v-if="newDoctor.avatar" class="avatar-preview">
+                <img 
+                  :src="getAvatarUrl(newDoctor.avatar)" 
+                  alt="avatar preview" 
+                />
+              </div>
+              <div class="upload-hint">支持 jpg/png，建议尺寸 200x200 以上</div>
+            </div>
             <div class="form-group full-width">
               <label>描述</label>
               <textarea v-model="newDoctor.description" placeholder="请输入医生描述信息" rows="3"></textarea>
@@ -349,7 +363,7 @@
         </div>
         <div class="modal-footer">
           <button class="action-btn outline" @click="closeAddDoctorModal">取消</button>
-          <button class="action-btn primary" @click="addDoctor">确认添加</button>
+          <button class="action-btn primary" @click="createDoctor">确认添加</button>
         </div>
       </div>
     </div>
@@ -363,6 +377,13 @@
         </div>
         <div class="modal-body" v-loading="detailLoading">
           <div v-if="doctorDetail" class="detail-content">
+            <!-- 头像信息 -->
+            <div class="detail-section" v-if="doctorDetail.avatar">
+              <h4>头像</h4>
+              <div class="doctor-avatar-large">
+                <img :src="getAvatarUrl(doctorDetail.avatar)" alt="医生头像" />
+              </div>
+            </div>
             <!-- 基本信息 -->
             <div class="detail-section">
               <h4>基本信息</h4>
@@ -486,6 +507,14 @@
                 <option :value="2">停职</option>
               </select>
             </div>
+            <div class="form-group">
+              <label>头像更新</label>
+              <input type="file" accept="image/*" @change="handleEditAvatarFileChange" />
+              <div v-if="editDoctorData.avatar" class="avatar-preview">
+                <img :src="getAvatarUrl(editDoctorData.avatar)" alt="avatar preview" />
+              </div>
+              <div class="upload-hint">支持 jpg/png，建议尺寸 200x200 以上</div>
+            </div>
             <div class="form-group full-width">
               <label>描述</label>
               <textarea v-model="editDoctorData.description" placeholder="请输入医生描述信息" rows="3"></textarea>
@@ -508,7 +537,8 @@ import { useStore } from 'vuex'
 import { ElNotification, ElMessage, ElMessageBox } from 'element-plus'
 import SideLeft from '@/components/manager/SideLeft.vue'
 import AdminHeader from '@/components/manager/AdminHeader.vue'
-import { getDoctorFullPage, createDoctor, getDoctorDetail, updateDoctor, deleteDoctor } from '@/api/doctors'
+import { uploadAvatar, addDoctor as addDoctorAPI, editDoctor as editDoctorAPI, getDepartmentList, getDoctorProfessionList, getDoctorPagerDataBySearch } from "@/api/api.js"
+import { getDoctorDetail, updateDoctor, deleteDoctor } from "@/api/doctors.js"
 
 // 状态管理
 const dropdownVisible = ref(false)
@@ -549,7 +579,8 @@ const newDoctor = ref({
   phone: '',
   enterDate: new Date().toISOString().split('T')[0],
   status: 0,
-  description: ''
+  description: '',
+  avatar: ''
 })
 
 // 医生数据
@@ -567,7 +598,8 @@ const editDoctorData = ref({
   phone: '',
   enterDate: '',
   status: 0,
-  description: ''
+  description: '',
+  avatar: ''
 })
 
 // 职称映射
@@ -700,22 +732,35 @@ const fetchDoctors = async () => {
     }
     
     console.log('📡 请求参数:', params)
-    const res = await getDoctorFullPage(params)
+    const res = await getDoctorPagerDataBySearch(params)
     console.log('✅ 医生列表响应:', res)
     
     const data = res?.data || {}
-    doctorList.value = (data.list || []).map(doctor => ({
-      id: doctor.id,
-      workId: doctor.workId,
-      name: doctor.name,
-      title: doctor.profashionTitle,
-      department: doctor.departmentName,
-      departmentName: doctor.departmentName, // 保持原字段名用于计算属性
-      specialty: doctor.majorDirect,
-      phone: doctor.phone,
-      hireDate: doctor.enterDate,
-      status: Number(doctor.status) // 确保status是数字类型
-    }))
+    doctorList.value = (data.list || []).map(doctor => {
+      // 调试：检查每个医生的头像数据
+      if (doctor.avatar) {
+        console.log('🖼️ 医生头像数据:', {
+          name: doctor.name,
+          originalAvatar: doctor.avatar,
+          avatarType: typeof doctor.avatar,
+          processedAvatar: doctor.avatar || ''
+        })
+      }
+      
+      return {
+        id: doctor.id,
+        workId: doctor.workId,
+        name: doctor.name,
+        title: doctor.profashionTitle,
+        department: doctor.departmentName,
+        departmentName: doctor.departmentName, // 保持原字段名用于计算属性
+        specialty: doctor.majorDirect,
+        phone: doctor.phone,
+        hireDate: doctor.enterDate,
+        status: Number(doctor.status), // 确保status是数字类型
+        avatar: doctor.avatar || ''
+      }
+    })
     
     // 更新分页信息
     pagination.value = {
@@ -835,6 +880,26 @@ const getTitleClass = (title) => {
   return titleMap[title] || 'resident'
 }
 
+// 获取头像完整URL
+const getAvatarUrl = (avatar) => {
+  if (!avatar) {
+    console.log('🖼️ getAvatarUrl: 空头像')
+    return ''
+  }
+  
+  // 如果已经是完整URL，直接返回
+  if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
+    console.log('🖼️ getAvatarUrl: 完整URL:', avatar)
+    return avatar
+  }
+  
+  // 如果是相对路径，补充完整的服务器地址
+  const baseUrl = 'http://localhost:8081'
+  const fullUrl = avatar.startsWith('/') ? `${baseUrl}${avatar}` : `${baseUrl}/${avatar}`
+  console.log('🖼️ getAvatarUrl: 相对路径转换:', { original: avatar, full: fullUrl })
+  return fullUrl
+}
+
 const showAddDoctorModal = () => {
   showAddModal.value = true
 }
@@ -853,11 +918,12 @@ const closeAddDoctorModal = () => {
     phone: '',
     enterDate: new Date().toISOString().split('T')[0],
     status: 0,
-    description: ''
+    description: '',
+    avatar: ''
   }
 }
 
-const addDoctor = async () => {
+const createDoctor = async () => {
   // 表单验证
   if (!newDoctor.value.name || !newDoctor.value.workId || !newDoctor.value.gender || 
       !newDoctor.value.age || !newDoctor.value.ptId || !newDoctor.value.clinicRoomId) {
@@ -893,13 +959,15 @@ const addDoctor = async () => {
       phone: newDoctor.value.phone.trim() || undefined,
       enterDate: newDoctor.value.enterDate || undefined,
       status: newDoctor.value.status,
-      description: newDoctor.value.description.trim() || undefined
+      description: newDoctor.value.description.trim() || undefined,
+      avatar: newDoctor.value.avatar || undefined
     }
 
     console.log('🔄 正在创建医生:', doctorData)
+    console.log('📷 头像URL:', doctorData.avatar)
     
     // 调用API创建医生
-    const response = await createDoctor(doctorData)
+    const response = await addDoctorAPI(doctorData)
     console.log('✅ 创建医生响应:', response)
     
     if (response && response.code === 200) {
@@ -922,6 +990,138 @@ const addDoctor = async () => {
     ElMessage.error(`添加医生失败: ${error.message || '网络错误'}`)
   } finally {
     loading.value = false
+  }
+}
+
+// 头像上传处理（新增医生弹窗）
+const handleAvatarFileChange = async (e) => {
+  const file = e.target?.files?.[0]
+  if (!file) return
+  
+  // 文件类型验证
+  if (!file.type.startsWith('image/')) {
+    ElMessage.error('请选择图片文件')
+    return
+  }
+  
+  // 文件大小验证（5MB）
+  if (file.size > 5 * 1024 * 1024) {
+    ElMessage.error('图片大小不能超过5MB')
+    return
+  }
+  
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    
+    console.log('📷 开始上传头像:', {
+      name: file.name,
+      size: file.size,
+      type: file.type
+    })
+    console.log('📷 FormData内容:', Array.from(formData.entries()))
+    
+    const res = await uploadAvatar(formData)
+    console.log('📷 头像上传响应:', res)
+    
+    // 检查响应是否存在
+    if (!res) {
+      ElMessage.error('头像上传失败：服务器无响应')
+      return
+    }
+    
+    // 检查响应状态
+    if (res.code === 200) {
+      // 尝试多种可能的URL字段
+      const url = res.data?.url || res.data || res.url || res.path
+      console.log('📷 提取的URL:', url)
+      
+      if (url && typeof url === 'string') {
+        // 处理URL格式
+        const cleanUrl = url.startsWith('http') ? url.replace('http://localhost:8081', '') : url
+        newDoctor.value.avatar = cleanUrl
+        ElMessage.success('头像上传成功')
+        console.log('✅ 头像URL已设置:', newDoctor.value.avatar)
+      } else {
+        ElMessage.warning('上传成功但未返回有效URL')
+        console.warn('⚠️ 响应数据结构:', res)
+      }
+    } else {
+      ElMessage.error(res.msg || res.message || '头像上传失败')
+      console.error('❌ 上传失败响应:', res)
+    }
+  } catch (err) {
+    console.error('❌ 头像上传异常:', err)
+    ElMessage.error('头像上传失败：' + (err.message || '网络错误'))
+  } finally {
+    // 重置以便可重复选择同一文件
+    if (e && e.target) e.target.value = ''
+  }
+}
+
+// 头像上传处理（编辑医生弹窗）
+const handleEditAvatarFileChange = async (e) => {
+  const file = e.target?.files?.[0]
+  if (!file) return
+  
+  // 文件类型验证
+  if (!file.type.startsWith('image/')) {
+    ElMessage.error('请选择图片文件')
+    return
+  }
+  
+  // 文件大小验证（5MB）
+  if (file.size > 5 * 1024 * 1024) {
+    ElMessage.error('图片大小不能超过5MB')
+    return
+  }
+  
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    
+    console.log('📷 开始上传编辑医生头像:', {
+      name: file.name,
+      size: file.size,
+      type: file.type
+    })
+    console.log('📷 FormData内容:', Array.from(formData.entries()))
+    
+    const res = await uploadAvatar(formData)
+    console.log('📷 编辑医生头像上传响应:', res)
+    
+    // 检查响应是否存在
+    if (!res) {
+      ElMessage.error('头像上传失败：服务器无响应')
+      return
+    }
+    
+    // 检查响应状态
+    if (res.code === 200) {
+      // 尝试多种可能的URL字段
+      const url = res.data?.url || res.data || res.url || res.path
+      console.log('📷 提取的URL:', url)
+      
+      if (url && typeof url === 'string') {
+        // 处理URL格式
+        const cleanUrl = url.startsWith('http') ? url.replace('http://localhost:8081', '') : url
+        editDoctorData.value.avatar = cleanUrl
+        ElMessage.success('头像上传成功')
+        console.log('✅ 编辑医生头像URL已设置:', editDoctorData.value.avatar)
+      } else {
+        ElMessage.warning('上传成功但未返回有效URL')
+        console.warn('⚠️ 响应数据结构:', res)
+      }
+    } else {
+      ElMessage.error(res.msg || res.message || '头像上传失败')
+      console.error('❌ 上传失败响应:', res)
+    }
+  } catch (err) {
+    console.error('❌ 头像上传异常:', err)
+    ElMessage.error('头像上传失败：' + (err.message || '网络错误'))
+  } finally {
+    // 重置以便可重复选择同一文件
+    if (e && e.target) e.target.value = ''
   }
 }
 
@@ -974,7 +1174,8 @@ const editDoctor = async (doctor) => {
       phone: '',
       enterDate: '',
       status: 0,
-      description: ''
+      description: '',
+      avatar: ''
     }
     
     console.log('🔍 正在获取医生详情用于编辑:', doctor.id)
@@ -1036,7 +1237,8 @@ const editDoctor = async (doctor) => {
         phone: data.phone || '',
         enterDate: data.enterDate ? data.enterDate.split('T')[0] : '',
         status: data.status || 0,
-        description: data.description || '' // 直接从API响应获取
+        description: data.description || '', // 直接从API响应获取
+        avatar: data.avatar || '' // 回显头像URL
       }
       
       console.log('📝 编辑表单数据回显完成:', editDoctorData.value)
@@ -1074,7 +1276,8 @@ const closeEditModal = () => {
     phone: '',
     enterDate: '',
     status: 0,
-    description: ''
+    description: '',
+    avatar: ''
   }
 }
 
@@ -1115,7 +1318,8 @@ const updateDoctorInfo = async () => {
       phone: editDoctorData.value.phone.trim() || undefined,
       enterDate: editDoctorData.value.enterDate || undefined,
       status: editDoctorData.value.status,
-      description: editDoctorData.value.description.trim() || undefined
+      description: editDoctorData.value.description.trim() || undefined,
+      avatar: editDoctorData.value.avatar || undefined
     }
 
     console.log('🔄 正在更新医生信息:', updateData)
@@ -1326,7 +1530,6 @@ $border: #ebeef5;
   background: linear-gradient(135deg, #f0f9ff 0%, #e6f7ff 50%, #d1edff 100%);
   font-family: 'Helvetica Neue', Arial, sans-serif;
 }
-
 
 // 主体布局
 .main-layout {
@@ -1612,13 +1815,6 @@ $border: #ebeef5;
             text-align: center;
           }
 
-          .select-checkbox {
-            width: 16px;
-            height: 16px;
-            cursor: pointer;
-            accent-color: $primary;
-          }
-
           &:nth-child(1) { width: 5%; } /* 选择框 */
           &:nth-child(2) { width: 10%; } /* 工号 */
           &:nth-child(3) { width: 15%; } /* 医生姓名 */
@@ -1677,6 +1873,16 @@ $border: #ebeef5;
               display: flex;
               align-items: center;
               gap: 12px;
+
+              .doctor-avatar-img {
+                width: 32px;
+                height: 32px;
+                border-radius: 50%;
+                object-fit: cover;
+                flex-shrink: 0;
+                border: 1px solid #e5e7eb;
+                background: #f8fafc;
+              }
 
               .doctor-avatar {
                 width: 32px;
@@ -1947,6 +2153,24 @@ $border: #ebeef5;
             grid-column: 1 / -1;
           }
 
+          .avatar-preview {
+            margin-top: 8px;
+            img {
+              width: 64px;
+              height: 64px;
+              border-radius: 50%;
+              object-fit: cover;
+              border: 1px solid #e5e7eb;
+              background: #f8fafc;
+            }
+          }
+
+          .upload-hint {
+            margin-top: 4px;
+            font-size: 12px;
+            color: #999;
+          }
+
           label {
             display: block;
             margin-bottom: 8px;
@@ -2124,6 +2348,22 @@ $border: #ebeef5;
         font-weight: 600;
         padding-bottom: 8px;
         border-bottom: 2px solid $border;
+      }
+      
+      .doctor-avatar-large {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 16px;
+        
+        img {
+          width: 120px;
+          height: 120px;
+          border-radius: 50%;
+          object-fit: cover;
+          border: 3px solid #e5e7eb;
+          background: #f8fafc;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
       }
       
       .detail-grid {

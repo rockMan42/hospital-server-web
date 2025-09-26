@@ -19,3 +19,27 @@ export const doMothed = (form) => http.post('url',form);
  */
 //用户登录
 export const loginUser = (form) => http.post('http://localhost:8081/user/login',form);
+
+/**
+ * 文件上传模块
+ */
+// 上传头像
+export const uploadAvatar = (formData) => http.postFile('/file/uploadAvatar', formData);
+
+/**
+ * 医生管理模块
+ */
+// 新增医生
+export const addDoctor = (form) => http.post('http://localhost:8081/hospital/doctor/createDoctor', form);
+
+// 编辑医生
+export const editDoctor = (form) => http.post('http://localhost:8081/hospital/doctor/updateDoctor', form);
+
+// 获取科室列表
+export const getDepartmentList = () => http.get('http://localhost:8081/hospital/department/getDepartmentList');
+
+// 获取医生职称列表
+export const getDoctorProfessionList = () => http.get('http://localhost:8081/hospital/profession/getProfessionList');
+
+// 分页查询医生数据
+export const getDoctorPagerDataBySearch = (params) => http.post('http://localhost:8081/hospital/doctor/getDoctorFullPage', params);

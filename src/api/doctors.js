@@ -163,3 +163,31 @@ export const getDoctorDetail = (id) => {
 export const updateDoctor = (doctorData) => {
   return http.post('/hospital/doctor/updateDoctor', doctorData);
 };
+
+/**
+ * 上传医生头像
+ * @param {File|FormData} fileOrFormData - 头像文件或已构造的FormData
+ * @returns {Promise} 响应结果，期望 data 中包含头像URL，如 { url: string }
+ */
+export const uploadDoctorAvatar = (fileOrFormData) => {
+  let formData;
+  if (fileOrFormData instanceof FormData) {
+    formData = fileOrFormData;
+  } else {
+    formData = new FormData();
+    const filename = fileOrFormData?.name || 'avatar.jpg';
+    formData.append('file', fileOrFormData, filename);
+    // 兼容部分后端以 'avatar' 作为字段名
+    formData.append('avatar', fileOrFormData, filename);
+  }
+  // 若传入的就是 FormData，但缺少文件字段名，尽量补齐
+  if (!formData.has('file') && fileOrFormData instanceof File) {
+    const filename = fileOrFormData?.name || 'avatar.jpg';
+    formData.append('file', fileOrFormData, filename);
+  }
+  if (!formData.has('avatar') && fileOrFormData instanceof File) {
+    const filename = fileOrFormData?.name || 'avatar.jpg';
+    formData.append('avatar', fileOrFormData, filename);
+  }
+  return http.postFile('/file/uploadAvatar', formData);
+};

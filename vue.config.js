@@ -22,7 +22,20 @@ module.exports = defineConfig({
     host: '0.0.0.0', // 匹配本机IP地址(默认是0.0.0.0)
     port: 8018, // 开发服务器运行端口号
     https: false,
-    proxy: null,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8081',
+        changeOrigin: true,
+        pathRewrite: {
+          '^/api': ''
+        }
+      },
+      '/img': {
+        target: 'http://localhost:8081',
+        changeOrigin: true,
+        // 不重写路径，保持 /img 前缀
+      }
+    },
   },
   configureWebpack: {
     plugins: [
