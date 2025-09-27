@@ -41,5 +41,8 @@ export const getDepartmentList = () => http.get('http://localhost:8081/hospital/
 // 获取医生职称列表
 export const getDoctorProfessionList = () => http.get('http://localhost:8081/hospital/profession/getProfessionList');
 
+// 获取职称列表（新接口）
+export const getProfessionTitleList = () => http.get('/hospital/doctor/getProfessionTitleList');
+
 // 分页查询医生数据
 export const getDoctorPagerDataBySearch = (params) => http.post('http://localhost:8081/hospital/doctor/getDoctorFullPage', params);

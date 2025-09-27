@@ -23,11 +23,11 @@ axios.interceptors.response.use(response => {
   return response;
 },
   error => {
-    if (error.response.data.code == 403) {
+    if (error.response && error.response.data && error.response.data.code == 403) {
       localStorage.clear();
       window.location.reload();
     }
-    return error;
+    return Promise.reject(error);
   }
 );
 
@@ -40,7 +40,7 @@ var http = {
    */
   get: function (url, params) {
     return new Promise((resolve, reject) => {
-      axios.get(url, params)
+      axios.get(url, { params })
         .then((response) => {
           resolve(response.data);
         })

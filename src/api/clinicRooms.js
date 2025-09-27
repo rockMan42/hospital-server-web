@@ -53,6 +53,40 @@ export const getClinicRoomPageList = (params) => {
 };
 
 /**
+ * 获取诊室列表（用于下拉选择）
+ * @param {Object} params - 查询参数
+ * @param {number} params.departmentId - 科室ID（可选）
+ * @param {number} params.status - 诊室状态（可选）
+ * @returns {Promise} 诊室列表
+ * 响应格式: { 
+ *   code: 200, 
+ *   msg: "操作成功", 
+ *   data: [
+ *     {
+ *       clinicRoomId: number, // 诊室ID
+ *       name: string          // 诊室名称
+ *     }
+ *   ]
+ * }
+ */
+export const getClinicRoomPage = (params = {}) => {
+  console.log('=== getClinicRoomPage API调用 ===');
+  console.log('请求参数:', JSON.stringify(params, null, 2));
+  console.log('请求URL: /hospital/clinicroom/getClinicRoomPage');
+  
+  return http.get('/hospital/clinicroom/getClinicRoomPage', params)
+    .then(response => {
+      console.log('诊室列表API响应成功:', response);
+      return response;
+    })
+    .catch(error => {
+      console.error('诊室列表API调用失败:', error);
+      console.error('错误详情:', error.response?.data);
+      throw error;
+    });
+};
+
+/**
  * 获取诊室详情
  * @param {number} id - 诊室ID
  * @returns {Promise} 诊室详情

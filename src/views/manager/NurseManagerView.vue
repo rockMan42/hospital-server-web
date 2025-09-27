@@ -62,15 +62,15 @@
 
         <!-- 快捷操作 -->
         <div class="quick-actions">
-          <button class="action-btn primary" @click="showAddModal = true">
-            <span class="icon">➕</span>
+          <button class="action-btn primary" @click="showAddNurseModal">
+            <span class="icon">➡️</span>
             新增护士
           </button>
-          <button class="action-btn outline" @click="exportData">
+          <button class="action-btn outline" @click="exportNurseData">
             <span class="icon">📤</span>
             导出数据
           </button>
-          <button class="action-btn outline" @click="importData">
+          <button class="action-btn outline" @click="importNurseData">
             <span class="icon">📥</span>
             导入数据
           </button>
@@ -127,21 +127,12 @@
               <option value="suspended">停职</option>
             </select>
             
-            <select class="filter-select" v-model="selectedLevel" @change="handleFilter">
-              <option value="">全部级别</option>
-              <option value="head">护士长</option>
-              <option value="supervisor">主管护师</option>
-              <option value="nurse">护师</option>
-              <option value="junior">护士</option>
+            <select class="filter-select" v-model="selectedLevel" @change="handleFilter" @click="onTitleSelectClick" :disabled="professionTitlesLoading">
+              <option value="">{{ professionTitlesLoading ? '加载中...' : `全部职称(${nurseProfessionTitles.length})` }}</option>
+              <option v-for="title in nurseProfessionTitles" :key="title.id" :value="title.id">
+                {{ title.profashionTitle }}
+              </option>
             </select>
-
-            <button class="clear-search-btn" @click="clearAllSearch">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-              清空搜索
-            </button>
           </div>
         </div>
 
@@ -150,9 +141,12 @@
           <div class="list-header">
             <h2>护士列表</h2>
             <div class="list-info">
-              共 {{ filteredNurses.length }} 位护士
+              共 {{ totalCount }} 位护士
               <span v-if="selectedNurses.length > 0" class="selected-info">
                 (已选择 {{ selectedNurses.length }} 位)
+              </span>
+              <span v-if="loading" class="loading-info">
+                加载中...
               </span>
             </div>
           </div>
@@ -185,7 +179,7 @@
                   v-for="nurse in paginatedNurses" 
                   :key="nurse.id"
                   class="table-row"
-                  @click="selectNurse(nurse.id)"
+                  @click="handleNurseRowClick(nurse)"
                 >
                   <td>
                     <input 
@@ -197,29 +191,29 @@
                     />
                   </td>
                   <td>
-                    <span class="employee-id">{{ nurse.employeeId }}</span>
+                    <span class="employee-id">{{ nurse.workId }}</span>
                   </td>
                   <td>
                     <div class="nurse-name-cell">
                       <div class="nurse-avatar">{{ nurse.name.charAt(0) }}</div>
                       <div>
                         <div class="nurse-name">{{ nurse.name }}</div>
-                        <div class="nurse-meta">{{ nurse.gender === 'female' ? '女' : '男' }} · {{ nurse.age }}岁</div>
+                        <div class="nurse-meta">{{ nurse.gender }} · {{ nurse.age || '未知' }}岁</div>
                       </div>
                     </div>
                   </td>
                   <td>
-                    <span class="level-badge" :class="nurse.level">
-                      {{ getLevelName(nurse.level) }}
+                    <span class="level-badge">
+                      {{ getLevelName(nurse.profashionTitle) }}
                     </span>
                   </td>
                   <td>
                     <div class="department-info">
-                      <div class="department-name">{{ nurse.department }}</div>
+                      <div class="department-name">{{ nurse.departmentName }}</div>
                     </div>
                   </td>
                   <td>
-                    <span class="specialty">{{ nurse.specialty }}</span>
+                    <span class="specialty">{{ nurse.majorDirect }}</span>
                   </td>
                   <td>
                     <div class="contact-info">
@@ -227,7 +221,7 @@
                     </div>
                   </td>
                   <td>
-                    <span class="hire-date">{{ nurse.hireDate }}</span>
+                    <span class="hire-date">{{ nurse.enterDate }}</span>
                   </td>
                   <td>
                     <span class="status-badge" :class="nurse.status">
@@ -245,7 +239,7 @@
                       <button class="action-btn-mini schedule" @click.stop="manageSchedule(nurse)" title="排班管理">
                         📅
                       </button>
-                      <button class="action-btn-mini delete" @click.stop="deleteNurse(nurse)" title="删除">
+                      <button class="action-btn-mini delete" @click.stop="deleteNurseById(nurse)" title="删除">
                         🗑️
                       </button>
                     </div>
@@ -259,8 +253,8 @@
           <div class="pagination">
             <button 
               class="page-btn" 
-              :disabled="currentPage === 1"
-              @click="currentPage--"
+              :disabled="currentPage === 1 || loading"
+              @click="currentPage--; fetchNurseList()"
             >
               上一页
             </button>
@@ -271,7 +265,8 @@
                 :key="page"
                 class="page-number"
                 :class="{ active: page === currentPage }"
-                @click="currentPage = page"
+                :disabled="loading"
+                @click="currentPage = page; fetchNurseList()"
               >
                 {{ page }}
               </button>
@@ -279,11 +274,15 @@
             
             <button 
               class="page-btn" 
-              :disabled="currentPage === totalPages"
-              @click="currentPage++"
+              :disabled="currentPage >= totalPages || loading"
+              @click="currentPage++; fetchNurseList()"
             >
               下一页
             </button>
+            
+            <div class="page-info">
+              第 {{ currentPage }} 页 / 共 {{ totalPages }} 页
+            </div>
           </div>
         </div>
       </main>
@@ -294,13 +293,17 @@
       <div class="modal-content" @click.stop>
         <div class="modal-header">
           <h3>{{ showAddModal ? '新增护士' : '编辑护士' }}</h3>
+          <div v-if="editFormLoading && showEditModal" class="loading-indicator">
+            <span class="loading-spinner"></span>
+            正在加载护士信息...
+          </div>
           <button class="close-btn" @click="closeModal">×</button>
         </div>
         <div class="modal-body">
           <div class="form-grid">
             <div class="form-group">
               <label>工号 <span class="required">*</span></label>
-              <input type="text" v-model="nurseForm.employeeId" placeholder="请输入工号" />
+              <input type="text" v-model="nurseForm.workId" placeholder="请输入工号" />
             </div>
             <div class="form-group">
               <label>护士姓名 <span class="required">*</span></label>
@@ -310,8 +313,8 @@
               <label>性别 <span class="required">*</span></label>
               <select v-model="nurseForm.gender">
                 <option value="">请选择性别</option>
-                <option value="female">女</option>
-                <option value="male">男</option>
+                <option value="女">女</option>
+                <option value="男">男</option>
               </select>
             </div>
             <div class="form-group">
@@ -319,31 +322,38 @@
               <input type="number" v-model="nurseForm.age" placeholder="请输入年龄" />
             </div>
             <div class="form-group">
-              <label>护理级别 <span class="required">*</span></label>
-              <select v-model="nurseForm.level">
-                <option value="">请选择级别</option>
-                <option value="head">护士长</option>
-                <option value="supervisor">主管护师</option>
-                <option value="nurse">护师</option>
-                <option value="junior">护士</option>
+              <label>护理职称 <span class="required">*</span></label>
+              <select v-model="nurseForm.nptId" :disabled="professionTitlesLoading">
+                <option value="">{{ professionTitlesLoading ? '正在加载职称...' : '请选择职称' }}</option>
+                <option v-for="title in nurseProfessionTitles" :key="title.id" :value="title.id">
+                  {{ title.profashionTitle }}
+                </option>
               </select>
+              <small v-if="nurseProfessionTitles.length === 0 && !professionTitlesLoading" style="color: #999;">
+                暂无职称数据
+              </small>
+              <small v-else-if="nurseProfessionTitles.length > 0" style="color: #67c23a;">
+                已加载 {{ nurseProfessionTitles.length }} 个职称
+              </small>
             </div>
             <div class="form-group">
-              <label>科室 <span class="required">*</span></label>
-              <select v-model="nurseForm.department">
-                <option value="">请选择科室</option>
-                <option value="心血管内科">心血管内科</option>
-                <option value="骨科">骨科</option>
-                <option value="妇产科">妇产科</option>
-                <option value="儿科">儿科</option>
-                <option value="急诊科">急诊科</option>
-                <option value="ICU">ICU</option>
-                <option value="手术室">手术室</option>
+              <label>诊室</label>
+              <select v-model="nurseForm.clinicRoomId" :disabled="clinicRoomsLoading">
+                <option value="">{{ clinicRoomsLoading ? '正在加载诊室...' : '请选择诊室' }}</option>
+                <option v-for="room in clinicRooms" :key="room.clinicRoomId" :value="room.clinicRoomId">
+                  {{ room.name }}
+                </option>
               </select>
+              <small v-if="clinicRooms.length === 0 && !clinicRoomsLoading" style="color: #999;">
+                暂无诊室数据
+              </small>
+              <small v-else-if="clinicRooms.length > 0" style="color: #67c23a;">
+                已加载 {{ clinicRooms.length }} 个诊室
+              </small>
             </div>
             <div class="form-group">
               <label>专业方向</label>
-              <input type="text" v-model="nurseForm.specialty" placeholder="请输入专业方向" />
+              <input type="text" v-model="nurseForm.majorDirect" placeholder="请输入专业方向" />
             </div>
             <div class="form-group">
               <label>联系电话</label>
@@ -351,14 +361,14 @@
             </div>
             <div class="form-group">
               <label>入职时间</label>
-              <input type="date" v-model="nurseForm.hireDate" />
+              <input type="date" v-model="nurseForm.enterDate" />
             </div>
             <div class="form-group">
               <label>状态</label>
               <select v-model="nurseForm.status">
-                <option value="active">在岗</option>
-                <option value="vacation">休假</option>
-                <option value="suspended">停职</option>
+                <option :value="0">在岗</option>
+                <option :value="1">休假</option>
+                <option :value="2">停职</option>
               </select>
             </div>
             <div class="form-group full-width">
@@ -373,6 +383,78 @@
         </div>
       </div>
     </div>
+
+    <!-- 护士详情弹窗 -->
+    <div v-if="showDetailModal" class="modal-overlay" @click="closeDetailModal">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h3>编辑护士</h3>
+          <div v-if="editFormLoading" class="loading-indicator">
+            <span class="loading-spinner"></span>
+            正在加载护士信息...
+          </div>
+          <button class="close-btn" @click="closeModal">×</button>
+        </div>
+        <div class="modal-body">
+          <div v-if="detailLoading" class="loading-container">
+            <div class="loading-spinner"></div>
+            <p>加载护士详情中...</p>
+          </div>
+          <div v-else-if="nurseDetail" class="detail-grid">
+            <div class="detail-item">
+              <label>工号：</label>
+              <span class="detail-value workid">{{ nurseDetail.workId }}</span>
+            </div>
+            <div class="detail-item">
+              <label>护士姓名：</label>
+              <span class="detail-value name">{{ nurseDetail.name }}</span>
+            </div>
+            <div class="detail-item">
+              <label>性别：</label>
+              <span class="detail-value">{{ nurseDetail.gender }}</span>
+            </div>
+            <div class="detail-item">
+              <label>年龄：</label>
+              <span class="detail-value">{{ nurseDetail.age }}岁</span>
+            </div>
+            <div class="detail-item">
+              <label>护理职称：</label>
+              <span class="detail-value title">{{ nurseDetail.profashionTitle }}</span>
+            </div>
+            <div class="detail-item">
+              <label>所属科室：</label>
+              <span class="detail-value department">{{ nurseDetail.departmentName }}</span>
+            </div>
+            <div class="detail-item">
+              <label>专业方向：</label>
+              <span class="detail-value">{{ nurseDetail.majorDirect || '暂无' }}</span>
+            </div>
+            <div class="detail-item">
+              <label>联系电话：</label>
+              <span class="detail-value phone">{{ nurseDetail.phone || '暂无' }}</span>
+            </div>
+            <div class="detail-item">
+              <label>入职时间：</label>
+              <span class="detail-value">{{ nurseDetail.enterDate || '暂无' }}</span>
+            </div>
+            <div class="detail-item">
+              <label>工作状态：</label>
+              <span class="detail-value status" :class="getStatusKey(nurseDetail.status)">
+                {{ getStatusName(nurseDetail.status) }}
+              </span>
+            </div>
+            <div class="detail-item full-width" v-if="nurseDetail.description">
+              <label>备注信息：</label>
+              <span class="detail-value description">{{ nurseDetail.description }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="action-btn outline" @click="closeDetailModal">关闭</button>
+          <button class="action-btn primary" @click="editNurse(nurseDetail); closeDetailModal()">编辑护士</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -383,6 +465,8 @@ import { useStore } from 'vuex'
 import { ElNotification, ElMessage, ElMessageBox } from 'element-plus'
 import SideLeft from '@/components/manager/SideLeft.vue'
 import AdminHeader from '@/components/manager/AdminHeader.vue'
+import { getNurseFullPage, getNurseProfessionTitleList, getNurseDetail, createNurse, updateNurse, deleteNurse } from '@/api/nurses'
+import { getClinicRoomPage } from '@/api/clinicRooms'
 
 // 状态管理
 const searchByName = ref('')
@@ -391,11 +475,25 @@ const searchByDepartment = ref('')
 const selectedStatus = ref('')
 const selectedLevel = ref('')
 const currentPage = ref(1)
-const pageSize = 10
+const pageSize = ref(10)
 const selectedNurses = ref([])
 const showAddModal = ref(false)
 const showEditModal = ref(false)
+const showDetailModal = ref(false)
 const editingNurse = ref(null)
+const editFormLoading = ref(false)
+const nurseDetail = ref(null)
+
+// API数据状态
+const nurses = ref([])
+const nurseProfessionTitles = ref([])
+const clinicRooms = ref([])
+const loading = ref(false)
+const detailLoading = ref(false)
+const professionTitlesLoading = ref(false)
+const clinicRoomsLoading = ref(false)
+const totalCount = ref(0)
+const totalPages = ref(0)
 
 // 路由和状态
 const router = useRouter()
@@ -403,93 +501,217 @@ const store = useStore()
 
 // 表单数据
 const nurseForm = ref({
-  employeeId: '',
+  workId: '',
   name: '',
   gender: '',
   age: '',
-  level: '',
-  department: '',
-  specialty: '',
+  nptId: '',
+  clinicRoomId: '',
+  majorDirect: '',
   phone: '',
-  hireDate: '',
-  status: 'active',
+  enterDate: '',
+  status: 0,
   description: ''
 })
 
-// 模拟护士数据
-const nurses = ref([
-  {
-    id: 1,
-    employeeId: 'N001',
-    name: '李护士长',
-    gender: 'female',
-    age: 35,
-    level: 'head',
-    department: '心血管内科',
-    specialty: '心血管护理',
-    phone: '13800138001',
-    hireDate: '2018-03-15',
-    status: 'active'
-  },
-  {
-    id: 2,
-    employeeId: 'N002',
-    name: '王主管',
-    gender: 'female',
-    age: 32,
-    level: 'supervisor',
-    department: '骨科',
-    specialty: '骨科护理',
-    phone: '13800138002',
-    hireDate: '2019-06-20',
-    status: 'active'
-  },
-  {
-    id: 3,
-    employeeId: 'N003',
-    name: '张护师',
-    gender: 'female',
-    age: 28,
-    level: 'nurse',
-    department: '妇产科',
-    specialty: '妇产科护理',
-    phone: '13800138003',
-    hireDate: '2020-09-10',
-    status: 'vacation'
-  },
-  {
-    id: 4,
-    employeeId: 'N004',
-    name: '刘护士',
-    gender: 'female',
-    age: 25,
-    level: 'junior',
-    department: '儿科',
-    specialty: '儿科护理',
-    phone: '13800138004',
-    hireDate: '2021-12-05',
-    status: 'active'
-  },
-  {
-    id: 5,
-    employeeId: 'N005',
-    name: '陈护士',
-    gender: 'male',
-    age: 30,
-    level: 'nurse',
-    department: 'ICU',
-    specialty: '重症护理',
-    phone: '13800138005',
-    hireDate: '2019-01-15',
-    status: 'active'
+// API函数
+const fetchNurseList = async () => {
+  try {
+    loading.value = true
+    console.log('开始获取护士列表...')
+    
+    const params = {
+      page: currentPage.value,
+      size: pageSize.value
+    }
+    
+    // 添加搜索条件
+    if (searchByName.value.trim()) {
+      params.name = searchByName.value.trim()
+    }
+    if (searchByEmployeeId.value.trim()) {
+      params.workId = searchByEmployeeId.value.trim()
+    }
+    if (searchByDepartment.value.trim()) {
+      params.departmentName = searchByDepartment.value.trim()
+    }
+    if (selectedStatus.value !== '') {
+      params.status = getStatusValue(selectedStatus.value)
+    }
+    if (selectedLevel.value !== '') {
+      params.nptId = selectedLevel.value
+    }
+    
+    console.log('请求参数:', params)
+    
+    const response = await getNurseFullPage(params)
+    console.log('护士列表响应:', response)
+    
+    if (response.code === 200 && response.data) {
+      nurses.value = response.data.list || []
+      totalCount.value = response.data.totalCount || 0
+      totalPages.value = response.data.totalPage || 0
+      
+      console.log(`成功获取护士列表，共 ${totalCount.value} 条记录`)
+      
+      // 处理日期格式
+      nurses.value.forEach(nurse => {
+        if (nurse.enterDate) {
+          nurse.enterDate = nurse.enterDate.split('T')[0]
+        }
+      })
+    } else {
+      console.error('获取护士列表失败:', response.msg)
+      ElMessage.error(response.msg || '获取护士列表失败')
+    }
+  } catch (error) {
+    console.error('获取护士列表异常:', error)
+    console.error('错误详情:', error.response || error.message || error)
+    
+    // 更详细的错误信息
+    let errorMessage = '获取护士列表失败'
+    if (error.response) {
+      // 服务器响应错误
+      errorMessage = error.response.data?.msg || `服务器错误: ${error.response.status}`
+    } else if (error.request) {
+      // 网络连接错误
+      errorMessage = '网络连接失败，请检查网络连接'
+    } else {
+      // 其他错误
+      errorMessage = error.message || '未知错误'
+    }
+    
+    ElMessage.error(errorMessage)
+  } finally {
+    loading.value = false
   }
-])
+}
+
+const fetchNurseProfessionTitles = async () => {
+  try {
+    professionTitlesLoading.value = true
+    console.log('开始获取护士职称列表...')
+    
+    const response = await getNurseProfessionTitleList()
+    console.log('护士职称列表响应:', response)
+    
+    if (response.code === 200 && response.data) {
+      nurseProfessionTitles.value = response.data || []
+      console.log(`成功获取护士职称列表，共 ${nurseProfessionTitles.value.length} 个职称`)
+    } else {
+      console.error('获取护士职称列表失败:', response.msg)
+      ElMessage.error(response.msg || '获取护士职称列表失败')
+    }
+  } catch (error) {
+    console.error('获取护士职称列表异常:', error)
+    console.error('错误详情:', error.response || error.message || error)
+    
+    // 显示错误信息
+    let errorMessage = '获取护士职称列表失败'
+    if (error.response) {
+      errorMessage = error.response.data?.msg || `服务器错误: ${error.response.status}`
+    } else if (error.request) {
+      errorMessage = '网络连接失败，请检查网络连接'
+    } else {
+      errorMessage = error.message || '未知错误'
+    }
+    
+    ElMessage.error(errorMessage)
+  } finally {
+    professionTitlesLoading.value = false
+  }
+}
+
+const fetchNurseDetail = async (nurseId) => {
+  try {
+    detailLoading.value = true
+    console.log('开始获取护士详情，ID:', nurseId)
+    
+    const response = await getNurseDetail(nurseId)
+    console.log('护士详情响应:', response)
+    
+    if (response.code === 200 && response.data) {
+      nurseDetail.value = response.data
+      
+      // 处理日期格式
+      if (nurseDetail.value.enterDate) {
+        nurseDetail.value.enterDate = nurseDetail.value.enterDate.split('T')[0]
+      }
+      
+      console.log('成功获取护士详情:', nurseDetail.value.name)
+    } else {
+      console.error('获取护士详情失败:', response.msg)
+      ElMessage.error(response.msg || '获取护士详情失败')
+    }
+  } catch (error) {
+    console.error('获取护士详情异常:', error)
+    console.error('错误详情:', error.response || error.message || error)
+    
+    let errorMessage = '获取护士详情失败'
+    if (error.response) {
+      errorMessage = error.response.data?.msg || `服务器错误: ${error.response.status}`
+    } else if (error.request) {
+      errorMessage = '网络连接失败，请检查网络连接'
+    } else {
+      errorMessage = error.message || '未知错误'
+    }
+    
+    ElMessage.error(errorMessage)
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+const fetchClinicRooms = async () => {
+  try {
+    clinicRoomsLoading.value = true
+    console.log('开始获取诊室列表...')
+    
+    // 调用真实的诊室API
+    const response = await getClinicRoomPage({
+      status: 0 // 只获取可用的诊室
+    })
+    console.log('诊室列表响应:', response)
+    
+    if (response.code === 200 && response.data) {
+      clinicRooms.value = response.data || []
+      console.log(`成功获取诊室列表，共 ${clinicRooms.value.length} 个诊室`)
+    } else {
+      console.error('获取诊室列表失败:', response.msg)
+      ElMessage.error(response.msg || '获取诊室列表失败')
+    }
+  } catch (error) {
+    console.error('获取诊室列表异常:', error)
+    console.error('错误详情:', error.response || error.message || error)
+    
+    // 如果接口失败，使用模拟数据作为后备方案
+    console.warn('诊室接口调用失败，使用模拟数据')
+    clinicRooms.value = [
+      { clinicRoomId: 1, name: '内科诊室1号' },
+      { clinicRoomId: 2, name: '外科诊室1号' },
+      { clinicRoomId: 3, name: '儿科诊室1号' },
+      { clinicRoomId: 4, name: '妇产科诊室1号' },
+      { clinicRoomId: 5, name: '急诊科诊室1号' }
+    ]
+    
+    let errorMessage = '获取诊室列表失败'
+    if (error.response && error.response.status === 404) {
+      ElMessage.warning('诊室接口未实现，使用模拟数据')
+    } else {
+      ElMessage.warning('诊室接口暂时不可用，使用模拟数据')
+    }
+  } finally {
+    clinicRoomsLoading.value = false
+  }
+}
+
+
 
 // 统计数据
-const totalNurses = computed(() => nurses.value.length)
-const activeNurses = computed(() => nurses.value.filter(n => n.status === 'active').length)
+const totalNurses = computed(() => totalCount.value || 0)
+const activeNurses = computed(() => nurses.value.filter(n => n.status === 0).length)
 const departmentCoverage = computed(() => {
-  const departments = new Set(nurses.value.map(n => n.department))
+  const departments = new Set(nurses.value.map(n => n.departmentName))
   return departments.size
 })
 const nightShiftNurses = computed(() => {
@@ -497,26 +719,16 @@ const nightShiftNurses = computed(() => {
   return Math.floor(totalNurses.value * 0.3)
 })
 
-// 过滤后的护士
-const filteredNurses = computed(() => {
-  return nurses.value.filter(nurse => {
-    const matchName = !searchByName.value || nurse.name.toLowerCase().includes(searchByName.value.toLowerCase())
-    const matchEmployeeId = !searchByEmployeeId.value || nurse.employeeId.toLowerCase().includes(searchByEmployeeId.value.toLowerCase())
-    const matchDepartment = !searchByDepartment.value || nurse.department.toLowerCase().includes(searchByDepartment.value.toLowerCase())
-    const matchStatus = !selectedStatus.value || nurse.status === selectedStatus.value
-    const matchLevel = !selectedLevel.value || nurse.level === selectedLevel.value
-    
-    return matchName && matchEmployeeId && matchDepartment && matchStatus && matchLevel
-  })
+// 职称选项
+const titleOptions = computed(() => {
+  return nurseProfessionTitles.value.map(title => ({
+    value: title.id,
+    label: title.profashionTitle
+  }))
 })
 
-// 分页数据
-const totalPages = computed(() => Math.ceil(filteredNurses.value.length / pageSize))
-const paginatedNurses = computed(() => {
-  const start = (currentPage.value - 1) * pageSize
-  const end = start + pageSize
-  return filteredNurses.value.slice(start, end)
-})
+// 分页数据 - 直接使用API返回的数据
+const paginatedNurses = computed(() => nurses.value)
 
 const visiblePages = computed(() => {
   const pages = []
@@ -557,23 +769,35 @@ const isAllSelected = computed(() => {
 })
 
 // 辅助函数
-const getLevelName = (level) => {
-  const names = {
-    head: '护士长',
-    supervisor: '主管护师',
-    nurse: '护师',
-    junior: '护士'
-  }
-  return names[level] || '未知'
+const getLevelName = (profashionTitle) => {
+  return profashionTitle || '未知'
 }
 
 const getStatusName = (status) => {
   const names = {
-    active: '在岗',
-    vacation: '休假',
-    suspended: '停职'
+    0: '在岗',
+    1: '休假',
+    2: '停职'
   }
   return names[status] || '未知'
+}
+
+const getStatusValue = (statusKey) => {
+  const values = {
+    'active': 0,
+    'vacation': 1,
+    'suspended': 2
+  }
+  return values[statusKey]
+}
+
+const getStatusKey = (statusValue) => {
+  const keys = {
+    0: 'active',
+    1: 'vacation', 
+    2: 'suspended'
+  }
+  return keys[statusValue] || 'active'
 }
 
 // 事件处理
@@ -591,10 +815,25 @@ const handleSettingsClick = () => {
 
 const handleSearch = () => {
   currentPage.value = 1
+  fetchNurseList()
 }
 
 const handleFilter = () => {
   currentPage.value = 1
+  fetchNurseList()
+}
+
+// 点击职称下拉框时的处理
+const onTitleSelectClick = () => {
+  console.log('点击了职称下拉框')
+  console.log('当前职称数据:', nurseProfessionTitles.value)
+  console.log('职称数据长度:', nurseProfessionTitles.value.length)
+  
+  // 如果没有职称数据，尝试重新加载
+  if (nurseProfessionTitles.value.length === 0) {
+    console.log('职称数据为空，尝试重新加载...')
+    fetchNurseProfessionTitles()
+  }
 }
 
 const clearAllSearch = () => {
@@ -604,6 +843,7 @@ const clearAllSearch = () => {
   selectedStatus.value = ''
   selectedLevel.value = ''
   currentPage.value = 1
+  fetchNurseList()
 }
 
 const toggleSelectAll = () => {
@@ -630,64 +870,374 @@ const selectNurse = (nurseId) => {
   toggleNurseSelection(nurseId)
 }
 
-const exportData = () => {
+const showAddNurseModal = () => {
+  showAddModal.value = true
+}
+
+const exportNurseData = () => {
   ElMessage.success('导出功能开发中...')
 }
 
-const importData = () => {
+const importNurseData = () => {
   ElMessage.success('导入功能开发中...')
 }
 
-const batchDelete = () => {
-  ElMessageBox.confirm(
-    `确定要删除选中的 ${selectedNurses.value.length} 位护士吗？`,
-    '批量删除确认',
-    {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
+// 调试编辑表单数据
+const debugEditForm = () => {
+  console.log('=== 编辑表单调试信息 ===')
+  console.log('当前表单数据:', nurseForm.value)
+  console.log('诊室数据:', clinicRooms.value)
+  console.log('职称数据:', nurseProfessionTitles.value)
+  console.log('编辑中的护士:', editingNurse.value)
+  
+  if (nurses.value.length > 0) {
+    console.log('第一个护士数据示例:', nurses.value[0])
+    console.log('第一个护士字段:')
+    console.log('- age:', nurses.value[0].age, '类型:', typeof nurses.value[0].age)
+    console.log('- gender:', nurses.value[0].gender)
+    console.log('- clinicRoomId:', nurses.value[0].clinicRoomId, '类型:', typeof nurses.value[0].clinicRoomId)
+    console.log('- profashionTitle:', nurses.value[0].profashionTitle)
+  }
+  
+  ElMessage.info('调试信息已输出到控制台')
+}
+
+// 测试更新护士功能
+const testUpdateNurse = async () => {
+  try {
+    // 检查是否有护士数据
+    if (nurses.value.length === 0) {
+      ElMessage.warning('没有护士数据，请先添加护士')
+      return
     }
-  ).then(() => {
-    nurses.value = nurses.value.filter(nurse => !selectedNurses.value.includes(nurse.id))
-    selectedNurses.value = []
-    ElMessage.success('删除成功')
-  }).catch(() => {
-    ElMessage.info('已取消删除')
-  })
+    
+    // 使用第一个护士进行测试
+    const firstNurse = nurses.value[0]
+    const testUpdateData = {
+      id: firstNurse.id,
+      name: '张护士（已更新）',
+      phone: '13900139000',
+      status: 1,
+      clinicRoomId: 2,
+      description: '更新后的备注信息'
+    }
+    
+    console.log('测试更新护士:', testUpdateData)
+    const response = await updateNurse(testUpdateData)
+    
+    if (response.code === 200) {
+      ElMessage.success('测试更新护士成功')
+      await fetchNurseList() // 刷新列表
+    } else {
+      ElMessage.error(response.msg || '测试更新护士失败')
+    }
+  } catch (error) {
+    console.error('测试更新护士异常:', error)
+    ElMessage.error('测试更新护士失败: ' + (error.message || '未知错误'))
+  }
 }
 
-const viewNurse = (nurse) => {
-  ElMessage.info(`查看护士: ${nurse.name}`)
+// 测试删除护士功能
+const testDeleteNurse = async () => {
+  try {
+    // 检查是否有护士数据
+    if (nurses.value.length === 0) {
+      ElMessage.warning('没有护士数据，请先添加护士')
+      return
+    }
+    
+    // 使用最后一个护士进行测试删除
+    const lastNurse = nurses.value[nurses.value.length - 1]
+    console.log('测试删除护士:', lastNurse)
+    
+    await deleteNurseById(lastNurse)
+  } catch (error) {
+    console.error('测试删除护士异常:', error)
+    ElMessage.error('测试删除护士失败: ' + (error.message || '未知错误'))
+  }
 }
 
-const editNurse = (nurse) => {
-  editingNurse.value = nurse
-  nurseForm.value = { ...nurse }
-  showEditModal.value = true
+// 测试批量删除护士功能
+const testBatchDelete = async () => {
+  try {
+    // 检查是否有护士数据
+    if (nurses.value.length < 2) {
+      ElMessage.warning('护士数据不足，至少需要2个护士才能测试批量删除')
+      return
+    }
+    
+    // 选中最后两个护士进行测试
+    const testNurseIds = nurses.value.slice(-2).map(nurse => nurse.id)
+    selectedNurses.value = testNurseIds
+    
+    console.log('测试批量删除护士:', testNurseIds)
+    ElMessage.info(`已选中 ${testNurseIds.length} 个护士，请点击批量删除按钮进行测试`)
+  } catch (error) {
+    console.error('测试批量删除护士异常:', error)
+    ElMessage.error('测试批量删除护士失败: ' + (error.message || '未知错误'))
+  }
+}
+
+// 测试添加护士功能
+const testAddNurse = async () => {
+  try {
+    const testNurseData = {
+      name: '张护士',
+      workId: 'N100',
+      gender: '女',
+      age: 28,
+      nptId: 2,
+      clinicRoomId: 1,
+      majorDirect: '内科护理',
+      phone: '13800138000',
+      enterDate: '2024-01-01',
+      status: 0,
+      description: '经验丰富的内科护士'
+    }
+    
+    console.log('测试添加护士:', testNurseData)
+    const response = await createNurse(testNurseData)
+    
+    if (response.code === 200) {
+      ElMessage.success('测试添加护士成功')
+      await fetchNurseList() // 刷新列表
+    } else {
+      ElMessage.error(response.msg || '测试添加护士失败')
+    }
+  } catch (error) {
+    console.error('测试添加护士异常:', error)
+    ElMessage.error('测试添加护士失败: ' + (error.message || '未知错误'))
+  }
+}
+
+
+// 批量删除护士功能
+const batchDelete = async () => {
+  if (selectedNurses.value.length === 0) {
+    ElMessage.warning('请选择要删除的护士')
+    return
+  }
+  
+  try {
+    console.log('=== 开始批量删除护士 ===')
+    console.log('选中的护士IDs:', selectedNurses.value)
+    console.log('删除数量:', selectedNurses.value.length)
+    
+    // 获取选中护士的名称列表
+    const selectedNurseNames = nurses.value
+      .filter(nurse => selectedNurses.value.includes(nurse.id))
+      .map(nurse => nurse.name)
+      .slice(0, 5) // 最多显示5个名称
+    
+    const nameList = selectedNurseNames.join('、')
+    const moreText = selectedNurses.value.length > 5 ? `等${selectedNurses.value.length}位护士` : ''
+    
+    // 显示批量删除确认对话框
+    await ElMessageBox.confirm(
+      `确定要删除以下 ${selectedNurses.value.length} 位护士吗？\n\n${nameList}${moreText}\n\n此操作不可撤销！`,
+      '批量删除护士确认',
+      {
+        confirmButtonText: `确定删除 ${selectedNurses.value.length} 位护士`,
+        cancelButtonText: '取消',
+        type: 'warning',
+        dangerouslyUseHTMLString: true
+      }
+    )
+    
+    console.log('用户确认批量删除，开始调用API...')
+    const response = await deleteNurse(selectedNurses.value)
+    
+    if (response.code === 200) {
+      console.log('批量删除护士成功')
+      ElMessage.success(`成功删除 ${selectedNurses.value.length} 位护士`)
+      selectedNurses.value = [] // 清空选中状态
+      await fetchNurseList() // 刷新列表
+    } else {
+      console.error('批量删除护士失败:', response.msg)
+      ElMessage.error(response.msg || '批量删除护士失败')
+    }
+  } catch (error) {
+    if (error === 'cancel') {
+      console.log('用户取消批量删除操作')
+    } else {
+      console.error('批量删除护士异常:', error)
+      console.error('错误详情:', error.response || error.message || error)
+      
+      let errorMessage = '批量删除护士失败'
+      if (error.response) {
+        errorMessage = error.response.data?.msg || `服务器错误: ${error.response.status}`
+      } else if (error.request) {
+        errorMessage = '网络连接失败，请检查网络连接'
+      } else {
+        errorMessage = error.message || '未知错误'
+      }
+      
+      ElMessage.error(errorMessage)
+    }
+  }
+}
+
+const viewNurse = async (nurse) => {
+  await fetchNurseDetail(nurse.id)
+  showDetailModal.value = true
+}
+
+const handleNurseRowClick = async (nurse) => {
+  await fetchNurseDetail(nurse.id)
+  showDetailModal.value = true
+}
+
+const closeDetailModal = () => {
+  showDetailModal.value = false
+  nurseDetail.value = null
+}
+
+const editNurse = async (nurse) => {
+  try {
+    console.log('=== 开始编辑护士 ===')
+    console.log('护士ID:', nurse.id)
+    console.log('护士名称:', nurse.name)
+    
+    // 显示加载状态
+    editingNurse.value = nurse
+    showEditModal.value = true
+    editFormLoading.value = true
+    
+    // 调用详情接口获取完整信息
+    console.log('调用getNurseDetail接口获取完整信息...')
+    const response = await getNurseDetail(nurse.id)
+    console.log('护士详情响应:', response)
+    
+    if (response.code === 200 && response.data) {
+      const nurseDetail = response.data
+      console.log('获取到的完整护士信息:', nurseDetail)
+      
+      // 映射详情数据到表单格式
+      const formData = {
+        workId: nurseDetail.workId || '',
+        name: nurseDetail.name || '',
+        gender: nurseDetail.gender || '',
+        age: nurseDetail.age || '',
+        nptId: getNptIdByTitle(nurseDetail.profashionTitle) || '',
+        clinicRoomId: nurseDetail.clinicRoomId || '',
+        majorDirect: nurseDetail.majorDirect || '',
+        phone: nurseDetail.phone || '',
+        enterDate: nurseDetail.enterDate ? nurseDetail.enterDate.split('T')[0] : '',
+        status: nurseDetail.status !== undefined ? nurseDetail.status : 0,
+        description: nurseDetail.description || ''
+      }
+      
+      console.log('表单数据映射结果:', formData)
+      console.log('年龄:', formData.age, '性别:', formData.gender, '诊室ID:', formData.clinicRoomId)
+      
+      nurseForm.value = formData
+      ElMessage.success('护士信息加载成功')
+    } else {
+      console.error('获取护士详情失败:', response.msg)
+      ElMessage.error(response.msg || '获取护士详情失败')
+      
+      // 如果详情接口失败，使用列表数据作为后备
+      console.log('使用列表数据作为后备方案')
+      const formData = {
+        workId: nurse.workId || '',
+        name: nurse.name || '',
+        gender: nurse.gender || '',
+        age: nurse.age || '',
+        nptId: getNptIdByTitle(nurse.profashionTitle) || '',
+        clinicRoomId: nurse.clinicRoomId || '',
+        majorDirect: nurse.majorDirect || '',
+        phone: nurse.phone || '',
+        enterDate: nurse.enterDate ? nurse.enterDate.split('T')[0] : '',
+        status: nurse.status !== undefined ? nurse.status : 0,
+        description: nurse.description || ''
+      }
+      nurseForm.value = formData
+    }
+  } catch (error) {
+    console.error('编辑护士异常:', error)
+    ElMessage.error('加载护士信息失败，请检查网络连接')
+    
+    // 异常情况下使用列表数据
+    const formData = {
+      workId: nurse.workId || '',
+      name: nurse.name || '',
+      gender: nurse.gender || '',
+      age: nurse.age || '',
+      nptId: getNptIdByTitle(nurse.profashionTitle) || '',
+      clinicRoomId: nurse.clinicRoomId || '',
+      majorDirect: nurse.majorDirect || '',
+      phone: nurse.phone || '',
+      enterDate: nurse.enterDate ? nurse.enterDate.split('T')[0] : '',
+      status: nurse.status !== undefined ? nurse.status : 0,
+      description: nurse.description || ''
+    }
+    nurseForm.value = formData
+  } finally {
+    editFormLoading.value = false
+  }
+}
+
+const getNptIdByTitle = (titleName) => {
+  const title = nurseProfessionTitles.value.find(t => t.profashionTitle === titleName)
+  return title ? title.id : ''
 }
 
 const manageSchedule = (nurse) => {
   ElMessage.info(`管理护士排班: ${nurse.name}`)
 }
 
-const deleteNurse = (nurse) => {
-  ElMessageBox.confirm(
-    `确定要删除护士 "${nurse.name}" 吗？`,
-    '删除确认',
-    {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
+// 单个删除护士功能
+const deleteNurseById = async (nurse) => {
+  try {
+    console.log('=== 开始删除护士 ===')
+    console.log('护士信息:', {
+      id: nurse.id,
+      name: nurse.name,
+      workId: nurse.workId
+    })
+    
+    // 显示删除确认对话框
+    await ElMessageBox.confirm(
+      `确定要删除护士 "${nurse.name}" (${nurse.workId}) 吗？\n\n此操作不可撤销！`,
+      '删除护士确认',
+      {
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+        dangerouslyUseHTMLString: true
+      }
+    )
+    
+    console.log('用户确认删除，开始调用API...')
+    const response = await deleteNurse([nurse.id])
+    
+    if (response.code === 200) {
+      console.log('删除护士成功')
+      ElMessage.success(`成功删除护士 "${nurse.name}"`)
+      await fetchNurseList() // 刷新列表
+    } else {
+      console.error('删除护士失败:', response.msg)
+      ElMessage.error(response.msg || '删除护士失败')
     }
-  ).then(() => {
-    const index = nurses.value.findIndex(n => n.id === nurse.id)
-    if (index > -1) {
-      nurses.value.splice(index, 1)
-      ElMessage.success('删除成功')
+  } catch (error) {
+    if (error === 'cancel') {
+      console.log('用户取消删除操作')
+    } else {
+      console.error('删除护士异常:', error)
+      console.error('错误详情:', error.response || error.message || error)
+      
+      let errorMessage = '删除护士失败'
+      if (error.response) {
+        errorMessage = error.response.data?.msg || `服务器错误: ${error.response.status}`
+      } else if (error.request) {
+        errorMessage = '网络连接失败，请检查网络连接'
+      } else {
+        errorMessage = error.message || '未知错误'
+      }
+      
+      ElMessage.error(errorMessage)
     }
-  }).catch(() => {
-    ElMessage.info('已取消删除')
-  })
+  }
 }
 
 const closeModal = () => {
@@ -695,47 +1245,133 @@ const closeModal = () => {
   showEditModal.value = false
   editingNurse.value = null
   nurseForm.value = {
-    employeeId: '',
+    workId: '',
     name: '',
     gender: '',
     age: '',
-    level: '',
-    department: '',
-    specialty: '',
+    nptId: '',
+    clinicRoomId: '',
+    majorDirect: '',
     phone: '',
-    hireDate: '',
-    status: 'active',
+    enterDate: '',
+    status: 0,
     description: ''
   }
 }
 
-const saveNurse = () => {
-  if (!nurseForm.value.employeeId || !nurseForm.value.name || !nurseForm.value.gender || !nurseForm.value.level || !nurseForm.value.department) {
-    ElMessage.warning('请填写必填字段')
+const saveNurse = async () => {
+  // 表单验证
+  if (!nurseForm.value.workId || !nurseForm.value.name || !nurseForm.value.gender || !nurseForm.value.nptId) {
+    ElMessage.warning('请填写必填字段（工号、姓名、性别、职称）')
+    return
+  }
+  
+  // 年龄验证
+  if (nurseForm.value.age && (nurseForm.value.age < 18 || nurseForm.value.age > 65)) {
+    ElMessage.warning('年龄必须在18-65岁之间')
+    return
+  }
+  
+  // 手机号验证
+  if (nurseForm.value.phone && !/^1[3-9]\d{9}$/.test(nurseForm.value.phone)) {
+    ElMessage.warning('请输入正确的手机号码')
     return
   }
 
-  if (showAddModal.value) {
-    const newNurse = {
-      id: Date.now(),
-      ...nurseForm.value
+  try {
+    if (showAddModal.value) {
+      // 新增护士 - 数据清理和类型转换
+      const nurseData = {
+        name: nurseForm.value.name.trim(),
+        workId: nurseForm.value.workId.trim(),
+        gender: nurseForm.value.gender,
+        age: nurseForm.value.age ? parseInt(nurseForm.value.age) : undefined,
+        nptId: parseInt(nurseForm.value.nptId),
+        clinicRoomId: nurseForm.value.clinicRoomId ? parseInt(nurseForm.value.clinicRoomId) : undefined,
+        majorDirect: nurseForm.value.majorDirect ? nurseForm.value.majorDirect.trim() : undefined,
+        phone: nurseForm.value.phone ? nurseForm.value.phone.trim() : undefined,
+        enterDate: nurseForm.value.enterDate || undefined,
+        status: parseInt(nurseForm.value.status),
+        description: nurseForm.value.description ? nurseForm.value.description.trim() : undefined
+      }
+      
+      console.log('开始新增护士:', nurseData)
+      const response = await createNurse(nurseData)
+      
+      if (response.code === 200) {
+        ElMessage.success('新增护士成功')
+        closeModal()
+        await fetchNurseList() // 刷新列表
+      } else {
+        ElMessage.error(response.msg || '新增护士失败')
+      }
+    } else if (showEditModal.value) {
+      // 编辑护士 - 根据API要求只发送必要字段
+      const updateData = {
+        id: editingNurse.value.id
+      }
+      
+      // 只添加有值的字段
+      if (nurseForm.value.name && nurseForm.value.name.trim()) {
+        updateData.name = nurseForm.value.name.trim()
+      }
+      
+      if (nurseForm.value.phone && nurseForm.value.phone.trim()) {
+        updateData.phone = nurseForm.value.phone.trim()
+      }
+      
+      if (nurseForm.value.status !== undefined && nurseForm.value.status !== '') {
+        updateData.status = parseInt(nurseForm.value.status)
+      }
+      
+      if (nurseForm.value.clinicRoomId) {
+        updateData.clinicRoomId = parseInt(nurseForm.value.clinicRoomId)
+      }
+      
+      if (nurseForm.value.description && nurseForm.value.description.trim()) {
+        updateData.description = nurseForm.value.description.trim()
+      }
+      
+      console.log('开始编辑护士:', updateData)
+      const response = await updateNurse(updateData)
+      
+      if (response.code === 200) {
+        ElMessage.success('编辑护士成功')
+        closeModal()
+        await fetchNurseList() // 刷新列表
+      } else {
+        ElMessage.error(response.msg || '编辑护士失败')
+      }
     }
-    nurses.value.push(newNurse)
-    ElMessage.success('新增护士成功')
-  } else if (showEditModal.value) {
-    const index = nurses.value.findIndex(n => n.id === editingNurse.value.id)
-    if (index > -1) {
-      nurses.value[index] = { ...editingNurse.value, ...nurseForm.value }
-      ElMessage.success('编辑护士成功')
-    }
+  } catch (error) {
+    console.error('保存护士信息异常:', error)
+    ElMessage.error('保存护士信息失败，请检查网络连接')
   }
-
-  closeModal()
 }
 
 // 生命周期
-onMounted(() => {
-  // 页面加载完成
+onMounted(async () => {
+  console.log('护士管理页面加载中...')
+  console.log('当前基础URL:', 'http://localhost:8081/')
+  
+  try {
+    // 并行加载基础数据
+    console.log('步骤1: 并行加载基础数据')
+    await Promise.all([
+      fetchNurseProfessionTitles(),
+      fetchClinicRooms()
+    ])
+    
+    console.log('步骤2: 加载护士列表')
+    await fetchNurseList()
+    
+    console.log('护士管理页面加载完成')
+    console.log('最终职称数据:', nurseProfessionTitles.value)
+    console.log('最终诊室数据:', clinicRooms.value)
+  } catch (error) {
+    console.error('页面初始化失败:', error)
+    ElMessage.error('页面初始化失败，请刷新页面重试')
+  }
 })
 
 onUnmounted(() => {
@@ -1492,6 +2128,181 @@ $border: #ebeef5;
         padding: 8px;
       }
     }
+  }
+}
+
+// 详情弹窗样式
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  padding: 8px 0;
+
+  .detail-item {
+    display: flex;
+    align-items: flex-start;
+    padding: 12px;
+    background: #f8f9fc;
+    border-radius: 8px;
+    border-left: 4px solid $primary;
+
+    &.full-width {
+      grid-column: 1 / -1;
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    label {
+      font-weight: 600;
+      color: #555;
+      min-width: 80px;
+      margin-right: 12px;
+      flex-shrink: 0;
+    }
+
+    .detail-value {
+      color: $text;
+      word-break: break-word;
+      
+      &.workid {
+        font-family: 'Courier New', monospace;
+        color: $primary;
+        font-weight: 600;
+      }
+      
+      &.name {
+        font-weight: 600;
+        color: $text;
+      }
+      
+      &.title {
+        color: $warning;
+        font-weight: 500;
+      }
+      
+      &.department {
+        color: $success;
+        font-weight: 500;
+      }
+      
+      &.phone {
+        font-family: 'Courier New', monospace;
+        color: $primary;
+      }
+      
+      &.status {
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 500;
+        
+        &.active {
+          background: rgba($success, 0.1);
+          color: $success;
+        }
+        
+        &.vacation {
+          background: rgba($warning, 0.1);
+          color: $warning;
+        }
+        
+        &.suspended {
+          background: rgba($danger, 0.1);
+          color: $danger;
+        }
+      }
+      
+      &.description {
+        margin-top: 8px;
+        line-height: 1.6;
+        color: #666;
+      }
+    }
+  }
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  color: #666;
+}
+
+.loading-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #1890ff;
+  font-size: 14px;
+  margin-left: auto;
+  margin-right: 16px;
+}
+
+.loading-indicator .loading-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #e6f7ff;
+  border-top: 2px solid #1890ff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #1890ff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+.loading-container p {
+  color: #666;
+  margin: 0;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.page-info {
+  margin-left: 16px;
+  color: #666;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+}
+
+.loading-info {
+  color: $primary;
+  font-weight: 500;
+  margin-left: 8px;
+}
+
+// 移动端适配
+@media (max-width: 768px) {
+  .detail-grid {
+    grid-template-columns: 1fr;
+    
+    .detail-item {
+      flex-direction: column;
+      align-items: stretch;
+      
+      label {
+        margin-right: 0;
+        margin-bottom: 4px;
+        min-width: auto;
+      }
+    }
+  }
+  
+  .page-info {
+    margin-left: 0;
+    margin-top: 8px;
   }
 }
 </style>

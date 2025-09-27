@@ -172,6 +172,37 @@ const routes = [
         },
         component: () => import('@/views/manager/PatientManagerView.vue')
       },
+      // 费用配置
+      {
+        path: 'feeconfig',
+        name: 'ManagerFeeManager',
+        meta: {
+          title: "费用配置",
+          requiresAuth: true,
+          requiredRole: 'manager'
+        },
+        component: () => import('@/views/manager/FeeConfigurationView.vue')
+      },
+      {
+        path: 'billing',
+        name: 'ManagerBillingManager',
+        meta: {
+          title: "收费管理",
+          requiresAuth: true,
+          requiredRole: 'manager'
+        },
+        component: () => import('@/views/manager/BillingManagerView.vue')
+      },
+      {
+        path: 'schedule',
+        name: 'ManagerScheduleManager',
+        meta: {
+          title: "排班管理",
+          requiresAuth: true,
+          requiredRole: 'manager'
+        },
+        component: () => import('@/views/manager/ScheduleManagerView.vue')
+      },
       // 预约管理
       {
         path: 'reservation',
@@ -182,28 +213,6 @@ const routes = [
           requiredRole: 'manager'
         },
         component: () => import('@/views/manager/YuYueManagerView.vue')
-      },
-      // 门诊日程
-      {
-        path: 'schedule',
-        name: 'ManagerSchedule',
-        meta: {
-          title: "门诊日程",
-          requiresAuth: true,
-          requiredRole: 'manager'
-        },
-        component: () => import('@/views/manager/ScheduleView.vue')
-      },
-      // 出诊管理
-      {
-        path: 'outpatient',
-        name: 'ManagerOutpatientManager',
-        meta: {
-          title: "出诊管理",
-          requiresAuth: true,
-          requiredRole: 'manager'
-        },
-        component: () => import('@/views/manager/OutpatientManagerView.vue')
       },
       // 窗口挂号
       {
@@ -262,6 +271,158 @@ const routes = [
           requiredRole: 'nurse'
         },
         component: () => import('@/views/nurse/PatientCareView.vue')
+      }
+    ]
+  },
+  //公共设备页面
+  {
+    path: '/self-service',
+    name: 'SelfService',
+    meta: {
+      title: "自助服务机",
+      requiresAuth: false
+    },
+    redirect: '/self-service/home',
+    component: () => import('@/views/public/PublicDashBoardView.vue'),
+    children:[
+      {
+        path: 'home',
+        name: 'SelfServiceMachine',
+        meta: {
+          title: "自助机",
+          requiresAuth: false
+        },
+        component: () => import('@/views/public/SelfServiceView.vue')
+      },
+      // 科室选择页面
+      {
+        path:"department-selection",
+        name:"department-selection",
+        meta:{
+          title:"科室选择",
+          requiresAuth:false
+        },
+        component:()=>import('@/views/public/DepartmentSelection.vue')
+      },   
+      // 诊室选择页面   
+      {
+        path:"clinic-selection",
+        name:"clinic-selection",
+        meta:{
+          title:"诊室选择",
+          requiresAuth:false
+        },
+        component:()=>import('@/views/public/ClinicSelection.vue')
+      },
+      // 医生选择页面   
+      {
+        path:"doctor-selection",
+        name:"doctor-selection",
+        meta:{
+          title:"医生选择",
+          requiresAuth:false
+        },
+        component:()=>import('@/views/public/DoctorSelection.vue')
+      },
+      // 挂号方式选择页面
+      {
+        path:"patient-method-selection",
+        name:"PatientMethodSelection",
+        meta:{
+          title:"挂号方式选择",
+          requiresAuth:false
+        },
+        component:()=>import('@/views/public/PaymentMethodSelection.vue')
+      },
+      // 费用详情页面
+      {
+        path:"fee-details",
+        name:"FeeDetails",
+        meta:{
+          title:"费用详情",
+          requiresAuth:false
+        },
+        component:()=>import('@/views/public/FeedetailsView.vue')
+      },
+      // 支付页面
+      {
+        path:"payment",
+        name:"Payment",
+        meta:{
+          title:"支付页面",
+          requiresAuth:false
+        },
+        component:()=>import('@/views/public/PaymentView.vue')
+      },
+      //支付成功页面
+      {
+        path:"payment-success",
+        name:"PaymentSuccess",
+        meta:{
+          title:"支付成功",
+          requiresAuth:false
+        },
+        component:()=>import('@/views/public/PaymentSuccessView.vue')
+      },
+      //支付失败页面
+      {
+        path:"payment-failure",
+        name:"PaymentFailure",
+        meta:{
+          title:"支付失败",
+          requiresAuth:false
+        },
+        component:()=>import('@/views/public/PaymentFailedView.vue')
+      },
+      // 门诊缴费扫码页面
+      {
+        path:"payment-start-scan",
+        name:"PaymentStartScan",
+        meta:{
+          title:"门诊缴费扫码",
+          requiresAuth:false
+        },
+        component:()=>import('@/views/public/PaymentStartScanView.vue')
+      },
+      // 门诊缴费详细信息页面
+      {
+        path:"outpatient-fee-details",
+        name:"OutpatientFeeDetails",
+        meta:{
+          title:"门诊缴费详细信息",
+          requiresAuth:false
+        },
+        component:()=>import('@/views/public/OutpatientFeeDetailsView.vue')
+      },
+    ]
+  },
+  {
+    path: '/publicdevice',
+    name: 'PublicDevice',
+    meta: {
+      title: "公共设备",
+      requiresAuth: false
+    },
+    redirect: '/publicdevice/view',
+    component: () => import('@/views/public/PublicDashBoardView.vue'),
+    children:[
+      {
+        path: 'view',
+        name: 'PublicDeviceView',
+        meta: {
+          title: "公共设备展示",
+          requiresAuth: false
+        },
+        component: () => import('@/views/public/PublicDeviceView.vue')
+      },
+      {
+        path: 'queue',
+        name: 'QueueSystem',
+        meta: {
+          title: "排队叫号系统",
+          requiresAuth: false
+        },
+        component: () => import('@/views/public/QueueSystem.vue')
       }
     ]
   },

@@ -1,8 +1,8 @@
-const {
-  defineConfig
-} = require('@vue/cli-service')
+const { defineConfig } = require('@vue/cli-service')
 const CompressionPlugin = require('compression-webpack-plugin');
-const webpack = require('webpack'); // 引入webpack模块
+const webpack = require('webpack');
+const path = require('path');
+
 module.exports = defineConfig({  
   transpileDependencies: true,
   // 公共路径(必须有的)
@@ -11,6 +11,8 @@ module.exports = defineConfig({
   outputDir: "dist",
   // 静态资源存放的文件夹(相对于ouputDir)
   assetsDir: "assets",
+  // 指定 index.html 的路径
+  indexPath: 'index.html',
   // eslint-loader 是否在保存的时候检查(果断不用，这玩意儿我都没装)
   lintOnSave: false,
   // 我用的only，打包后小些
@@ -18,7 +20,7 @@ module.exports = defineConfig({
   productionSourceMap: true, // 不需要生产环境的设置false可以减小dist文件大小，加速构建
 
   devServer: {
-    open: true, // npm run serve后自动打开页面
+    open: true, // npm run dev后自动打开页面
     host: '0.0.0.0', // 匹配本机IP地址(默认是0.0.0.0)
     port: 8018, // 开发服务器运行端口号
     https: false,
@@ -37,6 +39,17 @@ module.exports = defineConfig({
       }
     },
   },
+  
+  chainWebpack: config => {
+    // 确保 HTML 插件正确配置
+    config
+      .plugin('html')
+      .tap(args => {
+        args[0].template = path.resolve(__dirname, 'public/index.html')
+        return args
+      })
+  },
+  
   configureWebpack: {
     plugins: [
       new CompressionPlugin({

@@ -308,8 +308,8 @@
             </div>
             <div class="form-group">
               <label>职称 <span class="required">*</span></label>
-              <select v-model="newDoctor.ptId">
-                <option value="">请选择职称</option>
+              <select v-model="newDoctor.ptId" :disabled="professionTitlesLoading">
+                <option value="">{{ professionTitlesLoading ? '正在加载职称...' : '请选择职称' }}</option>
                 <option v-for="option in titleOptions" :key="option.value" :value="option.value">
                   {{ option.label }}
                 </option>
@@ -317,8 +317,8 @@
             </div>
             <div class="form-group">
               <label>诊室 <span class="required">*</span></label>
-              <select v-model="newDoctor.clinicRoomId">
-                <option value="">请选择诊室</option>
+              <select v-model="newDoctor.clinicRoomId" :disabled="clinicRoomsLoading">
+                <option value="">{{ clinicRoomsLoading ? '正在加载诊室...' : '请选择诊室' }}</option>
                 <option v-for="option in clinicRoomOptions" :key="option.value" :value="option.value">
                   {{ option.label }}
                 </option>
@@ -471,8 +471,8 @@
             </div>
             <div class="form-group">
               <label>职称 <span class="required">*</span></label>
-              <select v-model="editDoctorData.ptId">
-                <option value="">请选择职称</option>
+              <select v-model="editDoctorData.ptId" :disabled="professionTitlesLoading">
+                <option value="">{{ professionTitlesLoading ? '正在加载职称...' : '请选择职称' }}</option>
                 <option v-for="option in titleOptions" :key="option.value" :value="option.value">
                   {{ option.label }}
                 </option>
@@ -480,8 +480,8 @@
             </div>
             <div class="form-group">
               <label>诊室 <span class="required">*</span></label>
-              <select v-model="editDoctorData.clinicRoomId">
-                <option value="">请选择诊室</option>
+              <select v-model="editDoctorData.clinicRoomId" :disabled="clinicRoomsLoading">
+                <option value="">{{ clinicRoomsLoading ? '正在加载诊室...' : '请选择诊室' }}</option>
                 <option v-for="option in clinicRoomOptions" :key="option.value" :value="option.value">
                   {{ option.label }}
                 </option>
@@ -537,8 +537,9 @@ import { useStore } from 'vuex'
 import { ElNotification, ElMessage, ElMessageBox } from 'element-plus'
 import SideLeft from '@/components/manager/SideLeft.vue'
 import AdminHeader from '@/components/manager/AdminHeader.vue'
-import { uploadAvatar, addDoctor as addDoctorAPI, editDoctor as editDoctorAPI, getDepartmentList, getDoctorProfessionList, getDoctorPagerDataBySearch } from "@/api/api.js"
+import { uploadAvatar, addDoctor as addDoctorAPI, editDoctor as editDoctorAPI, getDepartmentList, getDoctorProfessionList, getDoctorPagerDataBySearch, getProfessionTitleList } from "@/api/api.js"
 import { getDoctorDetail, updateDoctor, deleteDoctor } from "@/api/doctors.js"
+import { getClinicRoomPageList } from "@/api/clinicRooms.js"
 
 // 状态管理
 const dropdownVisible = ref(false)
@@ -554,6 +555,14 @@ const showEditModal = ref(false)
 const loading = ref(false)
 const detailLoading = ref(false)
 const editLoading = ref(false)
+
+// 诊室相关状态
+const clinicRooms = ref([])
+const clinicRoomsLoading = ref(false)
+
+// 职称相关状态
+const professionTitles = ref([])
+const professionTitlesLoading = ref(false)
 
 // 分页数据
 const pagination = ref({
@@ -636,30 +645,21 @@ const clinicRoomMap = {
   45: '康复科门诊'
 }
 
-// 职称选项（用于表单下拉选择）
-const titleOptions = [
-  { value: 1, label: '主任医师' },
-  { value: 2, label: '副主任医师' },
-  { value: 3, label: '主治医师' },
-  { value: 4, label: '住院医师' },
-  { value: 5, label: '实习医师' }
-]
+// 职称选项（动态从API获取）
+const titleOptions = computed(() => {
+  return professionTitles.value.map(title => ({
+    value: title.id,
+    label: title.profashionTitle
+  }))
+})
 
-// 诊室选项（用于表单下拉选择）
-const clinicRoomOptions = [
-  { value: 9, label: '内科普通门诊' },
-  { value: 10, label: '内科专家门诊' },
-  { value: 11, label: '外科门诊' },
-  { value: 35, label: '心内科普通门诊' },
-  { value: 36, label: '心内科专家门诊' },
-  { value: 37, label: '普外科门诊' },
-  { value: 39, label: '急诊科门诊' },
-  { value: 40, label: '眼科门诊' },
-  { value: 41, label: '耳鼻喉科门诊' },
-  { value: 43, label: '口腔科门诊' },
-  { value: 44, label: '中医科门诊' },
-  { value: 45, label: '康复科门诊' }
-]
+// 诊室选项（动态从API获取）
+const clinicRoomOptions = computed(() => {
+  return clinicRooms.value.map(room => ({
+    value: room.clinicRoomId,
+    label: room.name
+  }))
+})
 
 // 状态映射
 const statusMap = {
@@ -807,6 +807,81 @@ const fetchDoctors = async () => {
   }
 }
 
+// 获取诊室列表
+const fetchClinicRooms = async () => {
+  try {
+    console.log('=== 开始获取诊室列表 ===')
+    clinicRoomsLoading.value = true
+    
+    const response = await getClinicRoomPageList({
+      page: 1,
+      size: 100 // 获取所有诊室
+    })
+    console.log('诊室列表API响应:', response)
+    
+    if (response && response.code === 200 && response.data) {
+      const rawList = response.data.list || []
+      console.log('🔍 原始诊室数据:', rawList)
+      console.log('🔍 第一个诊室数据结构:', rawList[0])
+      
+      clinicRooms.value = rawList.map((room, index) => {
+        console.log(`🏥 处理诊室 ${index}:`, room)
+        
+        // 尝试多种可能的ID字段名
+        const clinicRoomId = room.clinicRoomId || room.id || room.roomId || index + 1
+        const name = room.name || room.roomName || '未知诊室'
+        
+        const processedRoom = { clinicRoomId, name }
+        console.log(`✅ 处理后的诊室:`, processedRoom)
+        
+        return processedRoom
+      })
+      
+      console.log('📋 最终诊室列表数据:', clinicRooms.value)
+      ElMessage.success(`成功加载 ${clinicRooms.value.length} 个诊室`)
+    } else {
+      console.error('获取诊室列表失败:', response)
+      ElMessage.error('获取诊室列表失败')
+      clinicRooms.value = []
+    }
+  } catch (error) {
+    console.error('获取诊室列表失败:', error)
+    ElMessage.error('获取诊室列表失败：' + (error.message || '网络错误'))
+    clinicRooms.value = []
+  } finally {
+    clinicRoomsLoading.value = false
+    console.log('=== 获取诊室列表完成 ===')
+  }
+}
+
+// 获取职称列表
+const fetchProfessionTitles = async () => {
+  try {
+    console.log('=== 开始获取职称列表 ===')
+    professionTitlesLoading.value = true
+    
+    const response = await getProfessionTitleList()
+    console.log('职称列表API响应:', response)
+    
+    if (response && response.code === 200 && response.data) {
+      professionTitles.value = response.data || []
+      console.log('职称列表数据:', professionTitles.value)
+      ElMessage.success(`成功加载 ${professionTitles.value.length} 个职称`)
+    } else {
+      console.error('获取职称列表失败:', response)
+      ElMessage.error('获取职称列表失败')
+      professionTitles.value = []
+    }
+  } catch (error) {
+    console.error('获取职称列表失败:', error)
+    ElMessage.error('获取职称列表失败：' + (error.message || '网络错误'))
+    professionTitles.value = []
+  } finally {
+    professionTitlesLoading.value = false
+    console.log('=== 获取职称列表完成 ===')
+  }
+}
+
 // 方法
 const toggleDropdown = (event) => {
   dropdownVisible.value = !dropdownVisible.value
@@ -924,10 +999,39 @@ const closeAddDoctorModal = () => {
 }
 
 const createDoctor = async () => {
-  // 表单验证
-  if (!newDoctor.value.name || !newDoctor.value.workId || !newDoctor.value.gender || 
-      !newDoctor.value.age || !newDoctor.value.ptId || !newDoctor.value.clinicRoomId) {
-    ElMessage.warning('请填写必要信息（姓名、工号、性别、年龄、职称、诊室）')
+  console.log('🏥 开始创建医生，表单数据:', newDoctor.value)
+  
+  // 检查诊室数据是否已加载
+  if (clinicRooms.value.length === 0) {
+    console.warn('⚠️ 诊室数据尚未加载完成')
+    ElMessage.warning('诊室数据加载中，请稍后再试')
+    return
+  }
+  
+  // 详细的表单验证
+  const validationErrors = []
+  if (!newDoctor.value.name || newDoctor.value.name.trim() === '') validationErrors.push('姓名')
+  if (!newDoctor.value.workId || newDoctor.value.workId.trim() === '') validationErrors.push('工号')
+  if (!newDoctor.value.gender) validationErrors.push('性别')
+  if (!newDoctor.value.age) validationErrors.push('年龄')
+  if (!newDoctor.value.ptId) validationErrors.push('职称')
+  if (!newDoctor.value.clinicRoomId && newDoctor.value.clinicRoomId !== 0) validationErrors.push('诊室')
+  
+  if (validationErrors.length > 0) {
+    console.error('❌ 表单验证失败，缺少字段:', validationErrors)
+    console.log('📋 当前表单值详情:', {
+      name: `"${newDoctor.value.name}"`,
+      workId: `"${newDoctor.value.workId}"`,
+      gender: `"${newDoctor.value.gender}"`,
+      age: `"${newDoctor.value.age}"`,
+      ptId: `"${newDoctor.value.ptId}"`,
+      clinicRoomId: `"${newDoctor.value.clinicRoomId}"`,
+      clinicRoomIdType: typeof newDoctor.value.clinicRoomId,
+      clinicRoomIdValue: newDoctor.value.clinicRoomId
+    })
+    console.log('🏥 可用诊室选项:', clinicRoomOptions.value)
+    console.log('🔍 诊室原始数据:', clinicRooms.value)
+    ElMessage.warning(`请填写必要信息：${validationErrors.join('、')}`)
     return
   }
 
@@ -1282,10 +1386,28 @@ const closeEditModal = () => {
 }
 
 const updateDoctorInfo = async () => {
-  // 表单验证
-  if (!editDoctorData.value.name || !editDoctorData.value.workId || !editDoctorData.value.gender || 
-      !editDoctorData.value.age || !editDoctorData.value.ptId || !editDoctorData.value.clinicRoomId) {
-    ElMessage.warning('请填写必要信息（姓名、工号、性别、年龄、职称、诊室）')
+  console.log('🏥 开始更新医生，表单数据:', editDoctorData.value)
+  
+  // 详细的表单验证
+  const validationErrors = []
+  if (!editDoctorData.value.name) validationErrors.push('姓名')
+  if (!editDoctorData.value.workId) validationErrors.push('工号')
+  if (!editDoctorData.value.gender) validationErrors.push('性别')
+  if (!editDoctorData.value.age) validationErrors.push('年龄')
+  if (!editDoctorData.value.ptId) validationErrors.push('职称')
+  if (!editDoctorData.value.clinicRoomId) validationErrors.push('诊室')
+  
+  if (validationErrors.length > 0) {
+    console.error('❌ 编辑表单验证失败，缺少字段:', validationErrors)
+    console.log('📋 当前编辑表单值详情:', {
+      name: editDoctorData.value.name,
+      workId: editDoctorData.value.workId,
+      gender: editDoctorData.value.gender,
+      age: editDoctorData.value.age,
+      ptId: editDoctorData.value.ptId,
+      clinicRoomId: editDoctorData.value.clinicRoomId
+    })
+    ElMessage.warning(`请填写必要信息：${validationErrors.join('、')}`)
     return
   }
 
@@ -1492,8 +1614,15 @@ const batchDeleteDoctors = async () => {
 
 // 生命周期
 onMounted(async () => {
+  console.log('=== DoctorManagerView 页面加载开始 ===')
   document.addEventListener('click', () => (dropdownVisible.value = false))
-  await fetchDoctors()
+  // 并行获取医生列表、诊室列表和职称列表
+  await Promise.all([
+    fetchDoctors(),
+    fetchClinicRooms(),
+    fetchProfessionTitles()
+  ])
+  console.log('=== DoctorManagerView 页面加载完成 ===')
 })
 
 onUnmounted(() => {

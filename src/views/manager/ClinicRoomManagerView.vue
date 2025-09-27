@@ -295,19 +295,15 @@
             </div>
             <div class="form-group">
               <label>所属科室 <span class="required">*</span></label>
-              <select v-model="roomForm.department" required>
-                <option value="">请选择科室</option>
-                <option value="内科">内科</option>
-                <option value="外科">外科</option>
-                <option value="儿科">儿科</option>
-                <option value="妇产科">妇产科</option>
-                <option value="急诊科">急诊科</option>
-                <option value="眼科">眼科</option>
-                <option value="耳鼻喉科">耳鼻喉科</option>
-                <option value="皮肤科">皮肤科</option>
-                <option value="口腔科">口腔科</option>
-                <option value="中医科">中医科</option>
-                <option value="康复科">康复科</option>
+              <select v-model="roomForm.department" required :disabled="departmentsLoading">
+                <option value="">{{ departmentsLoading ? '正在加载科室...' : '请选择科室' }}</option>
+                <option 
+                  v-for="dept in departments" 
+                  :key="dept.id" 
+                  :value="dept.name"
+                >
+                  {{ dept.name }}
+                </option>
               </select>
             </div>
             <div class="form-group">
@@ -331,6 +327,9 @@
         </div>
         <div class="modal-footer">
           <button class="action-btn outline" @click="closeModal">取消</button>
+          <button class="action-btn secondary" @click="debugFormData" style="margin-right: 10px;">
+            🐛 调试表单
+          </button>
           <button class="action-btn primary" @click="saveRoom">
             {{ showAddModal ? '添加诊室' : '保存修改' }}
           </button>
@@ -391,13 +390,14 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 import { ElNotification, ElMessage, ElMessageBox } from 'element-plus'
 import SideLeft from '@/components/manager/SideLeft.vue'
 import AdminHeader from '@/components/manager/AdminHeader.vue'
 import { getClinicRoomPageList, getClinicRoomDetail, createClinicRoom, updateClinicRoom, deleteClinicRoom } from '@/api/clinicRooms'
+import { getDepartmentList } from '@/api/api'
 
 // 状态管理
 const searchByName = ref('')
@@ -415,6 +415,10 @@ const roomDetail = ref({})
 const currentPage = ref(1)
 const pageSize = ref(10)
 const totalCount = ref(0)
+
+// 科室相关状态
+const departments = ref([])
+const departmentsLoading = ref(false)
 
 const router = useRouter()
 const store = useStore()
@@ -444,10 +448,40 @@ const departmentMap = {
   11: '康复科'
 }
 
-// 根据科室名称获取科室ID
+// 根据科室名称获取科室ID（使用动态科室数据）
 const getDepartmentIdByName = (deptName) => {
-  const entry = Object.entries(departmentMap).find(([id, name]) => name === deptName)
-  return entry ? parseInt(entry[0]) : undefined
+  console.log('🔍 查找科室ID:', { 
+    deptName, 
+    deptNameType: typeof deptName,
+    deptNameLength: deptName?.length,
+    departments: departments.value,
+    departmentNames: departments.value.map(d => ({ id: d.id, name: d.name, nameType: typeof d.name }))
+  })
+  
+  // 尝试精确匹配
+  let dept = departments.value.find(d => d.name === deptName)
+  
+  // 如果精确匹配失败，尝试去除空格后匹配
+  if (!dept && deptName) {
+    const trimmedName = deptName.trim()
+    dept = departments.value.find(d => d.name.trim() === trimmedName)
+    console.log('🔄 尝试去除空格匹配:', { trimmedName, found: !!dept })
+  }
+  
+  // 如果还是没找到，尝试忽略大小写匹配
+  if (!dept && deptName) {
+    dept = departments.value.find(d => d.name.toLowerCase() === deptName.toLowerCase())
+    console.log('🔄 尝试忽略大小写匹配:', { found: !!dept })
+  }
+  
+  const result = dept ? dept.id : undefined
+  console.log('🎯 科室ID查找结果:', { 
+    deptName, 
+    foundId: result, 
+    foundDept: dept,
+    allDepartments: departments.value
+  })
+  return result
 }
 
 // 状态映射
@@ -550,6 +584,50 @@ const fetchClinicRooms = async () => {
   } finally {
     loading.value = false
     console.log('=== fetchClinicRooms 函数执行完成 ===')
+  }
+}
+
+// 获取科室列表
+const fetchDepartments = async () => {
+  try {
+    console.log('=== 开始获取科室列表 ===')
+    departmentsLoading.value = true
+    
+    const response = await getDepartmentList()
+    console.log('科室列表API响应:', response)
+    
+    if (response && response.code === 200 && response.data) {
+      console.log('🔍 原始科室API数据:', response.data)
+      console.log('🔍 第一个科室数据结构:', response.data[0])
+      
+      departments.value = response.data.map((dept, index) => {
+        console.log(`🏥 处理科室 ${index}:`, dept)
+        
+        // 尝试多种可能的ID字段名
+        const id = dept.id || dept.departmentId || dept.deptId || dept.dcId || index + 1
+        const name = dept.name || dept.departmentName || dept.deptName || '未知科室'
+        const code = dept.code || dept.departmentCode || dept.deptCode || ''
+        
+        const processedDept = { id, name, code }
+        console.log(`✅ 处理后的科室:`, processedDept)
+        
+        return processedDept
+      })
+      
+      console.log('📋 最终科室列表数据:', departments.value)
+      ElMessage.success(`成功加载 ${departments.value.length} 个科室`)
+    } else {
+      console.error('获取科室列表失败:', response)
+      ElMessage.error('获取科室列表失败')
+      departments.value = []
+    }
+  } catch (error) {
+    console.error('获取科室列表失败:', error)
+    ElMessage.error('获取科室列表失败：' + (error.message || '网络错误'))
+    departments.value = []
+  } finally {
+    departmentsLoading.value = false
+    console.log('=== 获取科室列表完成 ===')
   }
 }
 
@@ -688,17 +766,37 @@ const closeModal = () => {
 
 const saveRoom = async () => {
   try {
+    console.log('🏥 开始保存诊室:', roomForm.value)
+    
     if (!roomForm.value.roomNumber || !roomForm.value.name || !roomForm.value.department) {
       ElMessage.warning('请填写必填字段')
+      return
+    }
+
+    console.log('📋 表单验证通过，开始科室ID查找')
+    console.log('🔍 当前科室数据:', departments.value)
+    console.log('🎯 选择的科室名称:', roomForm.value.department)
+
+    // 检查科室数据是否已加载
+    if (departments.value.length === 0) {
+      console.warn('⚠️ 科室数据尚未加载完成')
+      ElMessage.warning('科室数据加载中，请稍后再试')
       return
     }
 
     // 规范化与清理
     const deptId = getDepartmentIdByName(roomForm.value.department)
     if (!deptId) {
+      console.error('❌ 科室ID查找失败:', {
+        selectedDept: roomForm.value.department,
+        availableDepts: departments.value.map(d => d.name),
+        departmentsCount: departments.value.length
+      })
       ElMessage.warning('请选择有效的科室')
       return
     }
+    
+    console.log('✅ 科室ID查找成功:', deptId)
 
     const trimmedRoomNumber = (roomForm.value.roomNumber || '').trim()
     const trimmedName = (roomForm.value.name || '').trim()
@@ -816,10 +914,49 @@ const handleSettingsClick = () => {
   console.log('设置点击')
 }
 
+// 调试表单数据
+const debugFormData = () => {
+  console.log('🐛 === 表单调试信息 ===')
+  console.log('📋 表单数据:', roomForm.value)
+  console.log('🏥 科室数据:', departments.value)
+  console.log('🔍 科室选择:', {
+    selected: roomForm.value.department,
+    type: typeof roomForm.value.department,
+    length: roomForm.value.department?.length,
+    isEmpty: !roomForm.value.department,
+    isString: typeof roomForm.value.department === 'string'
+  })
+  console.log('🎯 科室匹配测试:')
+  departments.value.forEach(dept => {
+    const matches = dept.name === roomForm.value.department
+    console.log(`  ${dept.name} (ID: ${dept.id}) - 匹配: ${matches}`)
+  })
+  
+  // 测试科室ID查找
+  const foundId = getDepartmentIdByName(roomForm.value.department)
+  console.log('🔎 科室ID查找结果:', foundId)
+  
+  ElMessage.info('调试信息已输出到控制台')
+}
+
+// 监听表单数据变化
+watch(() => roomForm.value.department, (newDept, oldDept) => {
+  console.log('📝 科室选择变化:', { 
+    oldDept, 
+    newDept, 
+    newDeptType: typeof newDept,
+    newDeptLength: newDept?.length 
+  })
+}, { immediate: true })
+
 // 组件挂载时获取数据
-onMounted(() => {
+onMounted(async () => {
   console.log('ClinicRoomManagerView 组件已挂载')
-  fetchClinicRooms()
+  // 并行获取诊室列表和科室列表
+  await Promise.all([
+    fetchClinicRooms(),
+    fetchDepartments()
+  ])
 })
 </script>
 

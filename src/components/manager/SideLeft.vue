@@ -85,9 +85,10 @@
     { name: '护士管理', path: '/manager/nurse', icon: '👩‍⚕️', key: 'nurse' },
     { name: '患者管理', path: '/manager/patient', icon: '👥', key: 'patient' },
     { name: '预约管理', path: '/manager/reservation', icon: '📅', key: 'appointment' },
-    { name: '门诊日程', path: '/manager/schedule', icon: '🗓️', key: 'schedule' },
-    { name: '窗口挂号', path: '/manager/registration', icon: '🧾', key: 'registration' },
-    { name: '出诊管理', path: '/manager/outpatient', icon: '👨‍⚕️', key: 'outpatient' }
+    { name: '排班管理', path: '/manager/schedule', icon: '📅', key: 'schedule' },
+    { name: '收费管理', path: '/manager/billing', icon: '💰', key: 'billing' },
+    { name: '费用配置', path: '/manager/feeconfig', icon: '💰', key: 'feeconfig' },
+    { name: '窗口挂号', path: '/manager/registration', icon: '🧾', key: 'registration' }
   ])
   
   // 系统管理菜单项
