@@ -1,12 +1,14 @@
 <template>
   <div class="manager-container">
-    <AdminHeader
-      :username="username"
-      @toggle-sidebar="sidebarOpen = !sidebarOpen"
-      @logout="handleLogout"
+    <AdminHeader 
+      title="医院管理系统"
+      :notification-count="2"
+      @notification-click="handleNotificationClick"
+      @profile-click="handleProfileClick"
+      @settings-click="handleSettingsClick"
     />
-    <SideLeft :is-open="sidebarOpen" />
-    <div class="content-area" :class="{ 'sidebar-open': sidebarOpen }">
+    <SideLeft :activeMenu="'billing'" />
+    <div class="content-area">
       <!-- 统计卡片 -->
       <div class="stats-cards">
         <el-row :gutter="16">
@@ -234,7 +236,7 @@
         </div>
       </div>
     </div>
-  
+
     <!-- 新建收费对话框 -->
     <el-dialog
       v-model="paymentDialog.visible"
@@ -528,7 +530,8 @@
         </div>
       </div>
     </el-drawer>
-  </template>
+  </div>
+</template>
   
   <script setup>
   import { ref, reactive, onMounted, computed } from "vue";
@@ -538,11 +541,24 @@
   import AdminHeader from "@/components/manager/AdminHeader.vue";
   import SideLeft from "@/components/manager/SideLeft.vue";
   
-  const sidebarOpen = ref(false);
+  // 移除不需要的sidebarOpen状态
   const router = useRouter();
   const store = useStore();
   
   const username = ref(store.state.user?.username || "管理员");
+
+// AdminHeader事件处理
+const handleNotificationClick = () => {
+  ElMessage.info('通知功能待实现');
+};
+
+const handleProfileClick = () => {
+  ElMessage.info('个人资料功能待实现');
+};
+
+const handleSettingsClick = () => {
+  ElMessage.info('设置功能待实现');
+};
 
 // 退出登录
 const handleLogout = () => {
@@ -656,9 +672,7 @@ const handleLogout = () => {
     }, 0);
   });
   
-  const toggleSidebar = () => {
-    sidebarOpen.value = !sidebarOpen.value;
-  };
+  // 移除不需要的toggleSidebar函数
   
   const resetFilters = () => {
     filters.patientName = "";
@@ -1107,17 +1121,13 @@ const handleLogout = () => {
   // 主内容区域
   .content-area {
     flex: 1;
-    margin-left: 0;
-    margin-top: 72px;
+    margin-left: 260px; // 为SideLeft组件留出空间
+    margin-top: 72px; // 为AdminHeader组件留出空间
     min-height: calc(100vh - 72px);
     background: linear-gradient(135deg, #f0f9ff 0%, #e6f7ff 50%, #d1edff 100%);
     font-family: 'Helvetica Neue', Arial, sans-serif;
     padding: 30px;
     transition: margin-left 0.3s ease;
-    
-    &.sidebar-open {
-      margin-left: 260px;
-    }
   
     // 统计卡片
     .stats-cards {
@@ -1522,7 +1532,7 @@ const handleLogout = () => {
   // 响应式设计
   @media (max-width: 768px) {
     .content-area {
-      margin-left: 0 !important;
+      margin-left: 0 !important; // 移动端隐藏侧边栏
       padding: 20px;
   
       .filter-card {
