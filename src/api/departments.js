@@ -64,8 +64,10 @@ export const getDepartmentList = () => {
  *   ]
  * }
  */
-export const getClinicRoomList = (departmentId) => {
-  return http.get('/hospital/clinicroom/getClinicRoomPage', { departmentId });
+export const getClinicRoomListByDepartmentId = (departmentId) => {
+  return http.post('/hospital/clinicroom/getClinicRoomListByDepartmentId', { 
+    departmentId: departmentId 
+  });
 };
 
 /**

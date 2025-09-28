@@ -46,3 +46,15 @@ export const getProfessionTitleList = () => http.get('/hospital/doctor/getProfes
 
 // 分页查询医生数据
 export const getDoctorPagerDataBySearch = (params) => http.post('http://localhost:8081/hospital/doctor/getDoctorFullPage', params);
+
+/**
+ * 排班管理模块
+ */
+// 获取人员类型列表
+export const getStaffTypeSlimList = () => http.get('/hospital/schedule/getStaffTypeSlimList');
+
+// 获取班次时间列表
+export const getScheduleSlimList = () => http.get('/hospital/schedule/getScheduleSlimList');
+
+// 获取费用项目列表（挂号费类型）
+export const getFeeCateList = () => http.get('/hospital/fee/getFeeCategoryList');

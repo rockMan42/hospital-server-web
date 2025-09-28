@@ -103,11 +103,30 @@
           </el-select>
         </div>
         <div class="filter-item">
+          <div class="filter-label">诊室</div>
+          <el-select
+            v-model="filters.clinic_room_id"
+            placeholder="请选择诊室"
+            clearable
+            filterable
+            :disabled="!filters.department_id"
+            @change="handleClinicRoomChange"
+          >
+            <el-option
+              v-for="room in clinicRoomOptions"
+              :key="room.value"
+              :label="room.label"
+              :value="room.value"
+            />
+          </el-select>
+        </div>
+        <div class="filter-item">
           <div class="filter-label">人员类型</div>
           <el-select
             v-model="filters.staff_type"
             placeholder="请选择类型"
             clearable
+            @change="handleFilterStaffTypeChange"
           >
             <el-option
               v-for="type in staffTypeOptions"
@@ -365,8 +384,8 @@
             <el-form-item label="人员类型" prop="staff_type">
               <el-select
                 v-model="scheduleForm.staff_type"
-                @change="handleStaffTypeChange"
-                style="width: 100%"
+                placeholder="请选择人员类型"
+                @change="handleDialogStaffTypeChange"
               >
                 <!-- 使用后端加载的人员类型选项 -->
                 <el-option
@@ -398,7 +417,7 @@
           </el-col>
         </el-row>
 
-        <!-- 新增科室选择行 -->
+        <!-- 新增科室和诊室选择行 -->
         <el-row :gutter="20" class="mt-10">
           <el-col :span="12">
             <el-form-item label="科室/部门" prop="department_id">
@@ -415,6 +434,25 @@
                   :key="dept.value"
                   :label="dept.label"
                   :value="dept.value"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="诊室" prop="clinic_room_id">
+              <el-select
+                v-model="scheduleForm.clinic_room_id"
+                placeholder="请选择诊室"
+                clearable
+                filterable
+                :disabled="!scheduleForm.department_id"
+                @change="handleDialogClinicRoomChange"
+              >
+                <el-option
+                  v-for="room in clinicRoomOptions"
+                  :key="room.value"
+                  :label="room.label"
+                  :value="room.value"
                 />
               </el-select>
             </el-form-item>
@@ -652,11 +690,14 @@ import SideLeft from "@/components/manager/SideLeft.vue";
 // 引入后端接口
 import {
   getFeeCateList,
-  getDoctorList,
   getDepartmentList,
-  getStaffTypeList,
-  getTimeSlotList,
+  getStaffTypeSlimList,
+  getScheduleSlimList,
+  getDoctorPagerDataBySearch,
 } from "@/api/api";
+import { getClinicRoomListByDepartmentId } from "@/api/departments";
+import { getDoctorList } from "@/api/doctors";
+import { getNurseFullPage } from "@/api/nurses";
 
 // 移除不需要的sidebarOpen状态
 const router = useRouter();
@@ -692,6 +733,7 @@ const loading = ref(false);
 // 筛选条件
 const filters = reactive({
   department_id: "",
+  clinic_room_id: "", // 新增诊室筛选
   staff_type: "",
   staff_id: "",
   schedule_type: "",
@@ -713,10 +755,11 @@ const pagination = reactive({
   current_page: 1,
   page_size: 10,
   total: 0,
-});
+}); 
 
 // 数据选项
 const departmentOptions = ref([]);
+const clinicRoomOptions = ref([]); // 诊室选项列表
 const staffTypeOptions = ref([]); // 人员类型定义表，改为 {value,label}
 const TimeSlotOptions = ref([]); // 班次时间定义表，改为 {value,label}
 
@@ -758,10 +801,10 @@ const batchForm = reactive({
 
 // 排班表单
 const scheduleForm = reactive({
-  staff_type: "doctor",
+  staff_type: "", // 改为空字符串，等待API加载后设置默认值
   staff_id: "",
   week_days: [],
-  time_slot: "morning",
+  time_slot: "", // 改为空字符串，等待API加载后设置默认值
   schedule_type: "outpatient",
   location: "",
   // 业务相关字段
@@ -774,13 +817,15 @@ const scheduleForm = reactive({
   is_active: 1,
   notes: "",
   department_id: "", // 新增科室字段
+  clinic_room_id: "", // 新增诊室字段
 });
 
 // 表单验证规则
 const scheduleRules = {
+  staff_type: [{ required: true, message: "请选择人员类型", trigger: "change" }],
   staff_id: [{ required: true, message: "请选择人员", trigger: "change" }],
   week_days: [{ required: true, message: "请选择星期", trigger: "change" }],
-  time_slot: [{ required: true, message: "请选择班次", trigger: "change" }],
+  time_slot: [{ required: true, message: "请选择班次时间", trigger: "change" }],
   schedule_type: [
     { required: true, message: "请选择排班类型", trigger: "change" },
   ],
@@ -801,6 +846,8 @@ const resetFilters = () => {
   Object.keys(filters).forEach((key) => {
     filters[key] = "";
   });
+  // 清空诊室选项
+  clinicRoomOptions.value = [];
   loadSchedules();
 };
 
@@ -809,8 +856,50 @@ const searchSchedules = () => {
   loadSchedules();
 };
 
-const handleDepartmentChange = (deptId) => {
-  loadStaffOptions(deptId);
+const handleDepartmentChange = async (deptId) => {
+  // 清空诊室选择
+  filters.clinic_room_id = "";
+  
+  // 加载对应科室的诊室列表
+  if (deptId) {
+    await load_clinic_rooms_by_department(deptId);
+  } else {
+    clinicRoomOptions.value = [];
+  }
+  
+  // 重新加载人员选项（只按科室过滤，诊室已清空）
+  loadStaffOptions(deptId, null);
+};
+
+// 筛选区域诊室变化处理
+const handleClinicRoomChange = (clinicRoomId) => {
+  console.log('=== 筛选区域诊室变化 ===');
+  console.log('选择的诊室ID:', clinicRoomId);
+  
+  // 清空人员选择
+  filters.staff_id = "";
+  
+  // 重新加载人员选项（按科室和诊室过滤）
+  loadStaffOptions(filters.department_id, clinicRoomId);
+  
+  console.log('当前筛选条件:', { 
+    department_id: filters.department_id, 
+    clinic_room_id: clinicRoomId 
+  });
+};
+
+// 筛选区域人员类型变化处理
+const handleFilterStaffTypeChange = (staffType) => {
+  console.log('=== 筛选区域人员类型变化 ===');
+  console.log('选择的人员类型:', staffType);
+  
+  // 清空人员选择
+  filters.staff_id = "";
+  
+  // 重新过滤人员选项
+  filterStaffOptions("");
+  
+  console.log('当前人员选项:', filteredStaffOptions.value);
 };
 
 // 科室筛选方法
@@ -819,21 +908,40 @@ const filterDepartmentOptions = (query) => {
     const filtered = allDepartmentOptions.value.filter((dept) =>
       dept.label.toLowerCase().includes(query.toLowerCase())
     );
-    filteredDepartmentOptions.value = filtered.slice(0, 10); // 限制显示10条
+    filteredDepartmentOptions.value = filtered; // 显示所有匹配的科室
   } else {
-    filteredDepartmentOptions.value = allDepartmentOptions.value.slice(0, 10);
+    filteredDepartmentOptions.value = allDepartmentOptions.value; // 显示所有科室
   }
+};
+
+// 人员类型ID到键名的映射
+const getStaffTypeKey = (staffTypeId) => {
+  // 根据人员类型ID映射到staffOptions的键名
+  const typeMapping = {
+    1: 'doctor',        // 医生
+    2: 'nurse',         // 护士
+    3: 'pharmacist',    // 药剂师
+    4: 'finance',       // 财务
+    5: 'registration',  // 挂号
+    6: 'administrative',// 行政
+    7: 'logistics',     // 后勤
+  };
+  return typeMapping[staffTypeId] || 'doctor'; // 默认返回医生
 };
 
 // 人员筛选方法（主筛选区域）
 const filterStaffOptions = (query) => {
   let staffList = [];
 
-  if (filters.staff_type && staffOptions.value[filters.staff_type]) {
-    staffList = staffOptions.value[filters.staff_type];
+  if (filters.staff_type) {
+    const staffTypeKey = getStaffTypeKey(filters.staff_type);
+    console.log('筛选人员类型ID:', filters.staff_type, '映射键名:', staffTypeKey);
+    staffList = staffOptions.value[staffTypeKey] || [];
   } else {
     staffList = Object.values(staffOptions.value).flat();
   }
+
+  console.log('当前人员列表:', staffList);
 
   if (query) {
     const filtered = staffList.filter((staff) =>
@@ -843,11 +951,21 @@ const filterStaffOptions = (query) => {
   } else {
     filteredStaffOptions.value = staffList.slice(0, 10);
   }
+  
+  console.log('过滤后的人员选项:', filteredStaffOptions.value);
 };
 
 // 对话框内人员筛选方法（增强：按科室 + 人员类型过滤）
 const filterDialogStaffOptions = (query) => {
-  const staffList = staffOptions.value[scheduleForm.staff_type] || [];
+  let staffList = [];
+  
+  if (scheduleForm.staff_type) {
+    const staffTypeKey = getStaffTypeKey(scheduleForm.staff_type);
+    console.log('对话框人员类型ID:', scheduleForm.staff_type, '映射键名:', staffTypeKey);
+    staffList = staffOptions.value[staffTypeKey] || [];
+  } else {
+    staffList = Object.values(staffOptions.value).flat();
+  }
 
   let list = staffList;
   if (scheduleForm.department_id) {
@@ -855,6 +973,8 @@ const filterDialogStaffOptions = (query) => {
       (s) => String(s.department_id) === String(scheduleForm.department_id)
     );
   }
+
+  console.log('对话框当前人员列表:', list);
 
   if (query) {
     const filtered = list.filter((staff) =>
@@ -864,15 +984,47 @@ const filterDialogStaffOptions = (query) => {
   } else {
     filteredDialogStaffOptions.value = list.slice(0, 50);
   }
+  
+  console.log('对话框过滤后的人员选项:', filteredDialogStaffOptions.value);
 };
 
 // 对话框科室变化时，按科室加载人员并重置已选人员
-const handleDialogDepartmentChange = (deptId) => {
+const handleDialogDepartmentChange = async (deptId) => {
+  // 清空人员和诊室选择
   scheduleForm.staff_id = "";
+  scheduleForm.clinic_room_id = "";
+  
+  // 加载对应科室的诊室列表
+  if (deptId) {
+    await load_clinic_rooms_by_department(deptId);
+  } else {
+    clinicRoomOptions.value = [];
+  }
+  
   // loadStaffOptions 会根据传入 deptId 只保留该科室人员
-  loadStaffOptions(deptId);
+  loadStaffOptions(deptId, null);
   // 重新过滤对话框人员
   filterDialogStaffOptions("");
+};
+
+// 对话框诊室变化处理
+const handleDialogClinicRoomChange = (clinicRoomId) => {
+  console.log('=== 对话框诊室变化 ===');
+  console.log('选择的诊室ID:', clinicRoomId);
+  
+  // 清空人员选择
+  scheduleForm.staff_id = "";
+  
+  // 重新加载人员选项（按科室和诊室过滤）
+  loadStaffOptions(scheduleForm.department_id, clinicRoomId);
+  
+  // 重新过滤对话框人员
+  filterDialogStaffOptions("");
+  
+  console.log('当前表单条件:', { 
+    department_id: scheduleForm.department_id, 
+    clinic_room_id: clinicRoomId 
+  });
 };
 
 const allDepartmentOptions = ref([]); // 保存完整的科室列表
@@ -881,77 +1033,122 @@ const allDepartmentOptions = ref([]); // 保存完整的科室列表
 //加载科室/部门列表
 const load_departments_list = async () => {
   try {
+    console.log('=== 开始加载科室列表 ===');
     const response = await getDepartmentList();
-    if (response && response.data) {
+    console.log("科室列表API响应:", response);
+    
+    if (response && response.code === 200 && response.data) {
       departmentOptions.value = response.data.map((dept) => ({
-        value: dept.department_id,
-        label: dept.department_name,
+        value: dept.departmentId,  // 注意：使用departmentId而不是department_id
+        label: dept.name,          // 注意：使用name而不是department_name
       }));
       allDepartmentOptions.value = [...departmentOptions.value]; // 保存完整列表
-      filteredDepartmentOptions.value = allDepartmentOptions.value.slice(0, 10); // 初始显示前10条
+      filteredDepartmentOptions.value = allDepartmentOptions.value; // 初始显示所有科室
+      
+      console.log(`成功加载 ${departmentOptions.value.length} 个科室:`, departmentOptions.value);
+      console.log('filteredDepartmentOptions设置为:', filteredDepartmentOptions.value);
+    } else {
+      console.error("科室列表API响应格式错误:", response);
+      ElMessage.error("加载科室列表失败：响应格式错误");
     }
   } catch (error) {
     console.error("加载科室列表失败:", error);
+    ElMessage.error("加载科室列表失败，请检查网络连接");
   }
 };
 
-// 加载人员类型定义表（增强兼容不同后端字段）
+// 加载诊室列表（根据科室ID）
+const load_clinic_rooms_by_department = async (departmentId) => {
+  try {
+    console.log('=== 开始加载诊室列表 ===');
+    console.log('科室ID:', departmentId);
+    
+    if (!departmentId) {
+      clinicRoomOptions.value = [];
+      return;
+    }
+    
+    const response = await getClinicRoomListByDepartmentId(departmentId);
+    console.log("诊室列表API响应:", response);
+    
+    if (response && response.code === 200 && response.data) {
+      // 根据API响应结构映射数据：{clinicRoomId, name}
+      clinicRoomOptions.value = response.data.map((room) => ({
+        value: room.clinicRoomId,
+        label: room.name,
+      }));
+      console.log(`成功加载 ${clinicRoomOptions.value.length} 个诊室:`, clinicRoomOptions.value);
+    } else {
+      console.error("诊室列表API响应格式错误:", response);
+      clinicRoomOptions.value = [];
+      ElMessage.error("加载诊室列表失败：响应格式错误");
+    }
+  } catch (error) {
+    console.error("加载诊室列表失败:", error);
+    clinicRoomOptions.value = [];
+    ElMessage.error("加载诊室列表失败，请检查网络连接");
+  }
+};
+
+// 加载人员类型定义表（使用新的API接口）
 const load_staff_types = async () => {
   try {
-    const response = await getStaffTypeList();
-    // console.log("人员类型响应:", response);
-    if (response && response.data) {
-      // 支持后端返回多种字段结构：{type,name} 或 {id,name} 或 {value,label}
+    console.log('=== 开始加载人员类型列表 ===');
+    const response = await getStaffTypeSlimList();
+    console.log("人员类型API响应:", response);
+    
+    if (response && response.code === 200 && response.data) {
+      // 根据API响应结构映射数据：{id, typeName}
       staffTypeOptions.value = response.data.map((item) => {
         return {
-          value: item.type_code || "",
-          label: item.type_name || "",
+          value: item.id,
+          label: item.typeName,
         };
       });
+      console.log(`成功加载 ${staffTypeOptions.value.length} 个人员类型:`, staffTypeOptions.value);
+    } else {
+      console.error("人员类型API响应格式错误:", response);
+      ElMessage.error("加载人员类型失败：响应格式错误");
     }
   } catch (error) {
     console.error("加载人员类型定义失败:", error);
+    ElMessage.error("加载人员类型失败，请检查网络连接");
   }
 };
 
-// 加载时间班次定义表（增强兼容）
+// 加载时间班次定义表（使用新的API接口）
 const load_time_slots = async () => {
   try {
-    const response = await getTimeSlotList();
-    // console.log("时间班次响应:", response);
-    if (response && response.data) {
+    console.log('=== 开始加载班次时间列表 ===');
+    const response = await getScheduleSlimList();
+    console.log("班次时间API响应:", response);
+    
+    if (response && response.code === 200 && response.data) {
+      // 根据API响应结构映射数据：{id, slotName, startTime, endTime}
       TimeSlotOptions.value = response.data.map((item) => {
         return {
-          value: item.slot_code || "",
-          label: item.slot_name || "",
+          value: item.id,
+          label: `${item.slotName} (${item.startTime}-${item.endTime})`,
+          slotName: item.slotName,
+          startTime: item.startTime,
+          endTime: item.endTime,
         };
       });
+      console.log(`成功加载 ${TimeSlotOptions.value.length} 个班次时间:`, TimeSlotOptions.value);
+    } else {
+      console.error("班次时间API响应格式错误:", response);
+      ElMessage.error("加载班次时间失败：响应格式错误");
     }
   } catch (error) {
     console.error("加载时间班次定义失败:", error);
+    ElMessage.error("加载班次时间失败，请检查网络连接");
   }
 };
 
-// 加载医生列表（初始加载全部人员）
+// 加载医生列表（初始加载全部人员）- 已废弃，使用loadStaffOptions代替
 const load_doctor_list = async () => {
-  try {
-    const response = await getDoctorList();
-    console.log("医生列表响应:", response);
-    if (response && response.data) {
-      // 转换为 {value,label} 结构
-      staffOptions.value.doctor = response.data.map((doc) => ({
-        value: doc.doctor_id,
-        label: `${doc.doctor_name} - ${doc.department_name}`,
-        department_id: doc.department_id,
-        professional_title: doc.professional_title,
-      }));
-      // 初始化筛选后的人员列表
-      filterStaffOptions("");
-      filterDialogStaffOptions("");
-    }
-  } catch (error) {
-    console.error("加载医生列表失败:", error);
-  }
+  console.log('load_doctor_list已废弃，使用loadStaffOptions代替');
+  // 这个函数已经被loadStaffOptions替代，保留空实现避免报错
 };
 
 const staffOptions = ref({
@@ -986,8 +1183,17 @@ const getStaffTypeIcon = (type) => {
   return iconMap[type] || "👤";
 };
 
-// 格式化人员类型
-const formatStaffType = (type) => {
+// 格式化人员类型（使用动态API数据）
+const formatStaffType = (typeId) => {
+  // 如果传入的是ID，从staffTypeOptions中查找对应的名称
+  if (staffTypeOptions.value && staffTypeOptions.value.length > 0) {
+    const typeOption = staffTypeOptions.value.find(option => option.value == typeId);
+    if (typeOption) {
+      return typeOption.label;
+    }
+  }
+  
+  // 兼容旧的字符串类型映射（备用）
   const typeMap = {
     doctor: "医生",
     nurse: "护士",
@@ -997,7 +1203,7 @@ const formatStaffType = (type) => {
     administrative: "行政人员",
     logistics: "后勤人员",
   };
-  return typeMap[type] || type;
+  return typeMap[typeId] || typeId || "未知类型";
 };
 
 // 格式化星期
@@ -1014,8 +1220,17 @@ const formatWeekDay = (day) => {
   return dayMap[day] || day;
 };
 
-// 格式化时间段
-const formatTimeSlot = (slot) => {
+// 格式化时间段（使用动态API数据）
+const formatTimeSlot = (slotId) => {
+  // 如果传入的是ID，从TimeSlotOptions中查找对应的名称
+  if (TimeSlotOptions.value && TimeSlotOptions.value.length > 0) {
+    const slotOption = TimeSlotOptions.value.find(option => option.value == slotId);
+    if (slotOption) {
+      return slotOption.slotName || slotOption.label;
+    }
+  }
+  
+  // 兼容旧的字符串类型映射（备用）
   const slotMap = {
     morning: "上午",
     afternoon: "下午",
@@ -1025,11 +1240,20 @@ const formatTimeSlot = (slot) => {
     flexible: "弹性",
     off: "休息",
   };
-  return slotMap[slot] || slot;
+  return slotMap[slotId] || slotId || "未知班次";
 };
 
-// 格式化时间范围
-const formatTimeRange = (slot) => {
+// 格式化时间范围（使用动态API数据）
+const formatTimeRange = (slotId) => {
+  // 如果传入的是ID，从TimeSlotOptions中查找对应的时间范围
+  if (TimeSlotOptions.value && TimeSlotOptions.value.length > 0) {
+    const slotOption = TimeSlotOptions.value.find(option => option.value == slotId);
+    if (slotOption && slotOption.startTime && slotOption.endTime) {
+      return `${slotOption.startTime}-${slotOption.endTime}`;
+    }
+  }
+  
+  // 兼容旧的字符串类型映射（备用）
   const rangeMap = {
     morning: "07:00-15:00",
     afternoon: "15:00-23:00", 
@@ -1039,7 +1263,7 @@ const formatTimeRange = (slot) => {
     flexible: "弹性时间",
     off: "休息",
   };
-  return rangeMap[slot] || "";
+  return rangeMap[slotId] || "";
 };
 
 // 格式化排班类型
@@ -1109,99 +1333,230 @@ const formatAmount = (amount) => {
 };
 
 // 数据加载
-const loadStaffOptions = async (deptId = null) => {
+const loadStaffOptions = async (deptId = null, clinicRoomId = null) => {
   try {
-    // 先从后端加载医生列表，确保医生数据来自真实接口
+    console.log('=== 开始加载人员选项 ===');
+    console.log('科室ID:', deptId);
+    console.log('诊室ID:', clinicRoomId);
+    
+    // 加载医生列表
     let doctorList = [];
     try {
-      const resp = await getDoctorList();
-      if (resp && resp.data) {
-        doctorList = resp.data.map((doc) => ({
-          value: doc.doctor_id,
-          label: `${doc.doctor_name} - ${doc.department_name}`,
-          department_id: String(doc.department_id),
-          professional_title: doc.professional_title,
-        }));
+      console.log('正在加载医生列表...');
+      
+      if (deptId) {
+        // 有科室ID时，使用简单的医生列表API
+        const doctorParams = { departmentId: deptId };
+        // 如果有诊室ID，也添加到参数中
+        if (clinicRoomId) {
+          doctorParams.clinicRoomId = clinicRoomId;
+          console.log('按科室和诊室筛选医生:', { departmentId: deptId, clinicRoomId });
+        }
+        const doctorResp = await getDoctorList(doctorParams);
+        console.log("医生列表API响应:", doctorResp);
+        
+        if (doctorResp && doctorResp.code === 200 && doctorResp.data) {
+          // 获取科室名称用于显示
+          const selectedDept = departmentOptions.value.find(dept => String(dept.value) === String(deptId));
+          const departmentName = selectedDept ? selectedDept.label : '';
+          
+          // 获取诊室名称用于显示
+          let clinicRoomName = '';
+          if (clinicRoomId) {
+            const selectedRoom = clinicRoomOptions.value.find(room => String(room.value) === String(clinicRoomId));
+            clinicRoomName = selectedRoom ? selectedRoom.label : '';
+          }
+          
+          doctorList = doctorResp.data.map((doc) => {
+            let displayLabel = doc.name;
+            if (departmentName) {
+              displayLabel += ` - ${departmentName}`;
+            }
+            if (clinicRoomName) {
+              displayLabel += ` - ${clinicRoomName}`;
+            }
+            
+            return {
+              value: doc.doctorId,
+              label: displayLabel, // 显示姓名、科室和诊室
+              department_id: String(deptId),
+              clinic_room_id: String(clinicRoomId || ''),
+              professional_title: doc.profashionTitle || '',
+            };
+          });
+        }
+      } else {
+        // 没有科室ID时，使用分页API获取包含科室信息的医生数据
+        const doctorParams = {
+          page: 1,
+          size: 1000, // 获取所有医生
+        };
+        const doctorResp = await getDoctorPagerDataBySearch(doctorParams);
+        console.log("医生分页API响应:", doctorResp);
+        
+        if (doctorResp && doctorResp.code === 200 && doctorResp.data && doctorResp.data.list) {
+          doctorList = doctorResp.data.list.map((doc) => {
+            let displayLabel = doc.name;
+            if (doc.departmentName) {
+              displayLabel += ` - ${doc.departmentName}`;
+            }
+            // 检查API是否返回诊室信息
+            if (doc.clinicRoomName) {
+              displayLabel += ` - ${doc.clinicRoomName}`;
+            }
+            
+            return {
+              value: doc.id,
+              label: displayLabel, // 显示姓名、科室和诊室（如果有）
+              department_id: String(doc.departmentId || ''),
+              clinic_room_id: String(doc.clinicRoomId || ''),
+              professional_title: doc.profashionTitle || '',
+            };
+          });
+        }
       }
+      
+      console.log(`成功加载 ${doctorList.length} 个医生:`, doctorList);
     } catch (e) {
-      console.error("加载医生列表失败（loadStaffOptions）:", e);
-      doctorList = []; // 回退为空数组，避免抛出
+      console.error("加载医生列表失败:", e);
+      doctorList = [];
     }
 
-    // 其它人员类型保留模板，后续你可以替换为真实接口
+    // 加载护士列表
+    let nurseList = [];
+    try {
+      console.log('正在加载护士列表...');
+      const nurseParams = {
+        page: 1,
+        size: 1000, // 获取所有护士
+      };
+      
+      // 如果指定了科室ID，需要找到对应的科室名称
+      if (deptId) {
+        const selectedDept = departmentOptions.value.find(dept => String(dept.value) === String(deptId));
+        if (selectedDept) {
+          nurseParams.departmentName = selectedDept.label;
+          console.log('按科室名称筛选护士:', selectedDept.label);
+        }
+      }
+      
+      // 注意：护士API目前不支持诊室参数，只能按科室过滤
+      if (clinicRoomId) {
+        console.log('护士API暂不支持诊室过滤，仅按科室过滤');
+      }
+      
+      const nurseResp = await getNurseFullPage(nurseParams);
+      console.log("护士列表API响应:", nurseResp);
+      
+      if (nurseResp && nurseResp.code === 200 && nurseResp.data && nurseResp.data.list) {
+        nurseList = nurseResp.data.list.map((nurse) => {
+          let displayLabel = nurse.name;
+          if (nurse.departmentName) {
+            displayLabel += ` - ${nurse.departmentName}`;
+          }
+          // 检查API是否返回诊室信息
+          if (nurse.clinicRoomName) {
+            displayLabel += ` - ${nurse.clinicRoomName}`;
+          }
+          
+          return {
+            value: nurse.id,
+            label: displayLabel, // 显示姓名、科室和诊室（如果有）
+            department_id: String(deptId || ''), // 使用传入的科室ID
+            clinic_room_id: String(nurse.clinicRoomId || ''),
+            professional_title: nurse.profashionTitle,
+          };
+        });
+        console.log(`成功加载 ${nurseList.length} 个护士:`, nurseList);
+      } else {
+        console.log('护士API响应格式不正确或无数据');
+      }
+    } catch (e) {
+      console.error("加载护士列表失败:", e);
+      nurseList = [];
+    }
+
+    // 其它人员类型保留模板数据（后续可替换为真实接口）
     const templateOptions = {
       doctor: doctorList,
-      nurse: [
-        // 模板：请根据后端数据结构替换
-        // { value: 'N001', label: '示例护士 - 护理部', department_id: '2', professional_title: '护士' },
-      ],
+      nurse: nurseList,
       pharmacist: [
         {
           value: "P001",
-          label: "王药剂师 - 药学部",
+          label: "王药剂师 - 药学部 - 药房1",
           department_id: "5",
+          clinic_room_id: "R501",
           professional_title: "主管药师",
         },
         {
           value: "P002",
-          label: "赵药剂师 - 药学部",
+          label: "赵药剂师 - 药学部 - 药房2",
           department_id: "5",
+          clinic_room_id: "R502",
           professional_title: "药师",
         },
       ],
       finance: [
         {
           value: "F001",
-          label: "陈会计 - 财务科",
+          label: "陈会计 - 财务科 - 财务室1",
           department_id: "6",
+          clinic_room_id: "R601",
           professional_title: "会计师",
         },
         {
           value: "F002",
-          label: "林出纳 - 财务科",
+          label: "林出纳 - 财务科 - 收费窗口1",
           department_id: "6",
+          clinic_room_id: "R602",
           professional_title: "出纳员",
         },
       ],
       registration: [
         {
           value: "R001",
-          label: "刘挂号员 - 挂号处",
+          label: "刘挂号员 - 挂号处 - 挂号窗口1",
           department_id: "7",
+          clinic_room_id: "R701",
           professional_title: "挂号员",
         },
         {
           value: "R002",
-          label: "杨收费员 - 收费处",
+          label: "杨收费员 - 收费处 - 收费窗口2",
           department_id: "7",
+          clinic_room_id: "R702",
           professional_title: "收费员",
         },
       ],
       administrative: [
         {
           value: "A001",
-          label: "黄主任 - 行政科",
+          label: "黄主任 - 行政科 - 行政办公室",
           department_id: "8",
+          clinic_room_id: "R801",
           professional_title: "行政主任",
         },
         {
           value: "A002",
-          label: "周文员 - 行政科",
+          label: "周文员 - 行政科 - 档案室",
           department_id: "8",
+          clinic_room_id: "R802",
           professional_title: "行政文员",
         },
       ],
       logistics: [
         {
           value: "L001",
-          label: "吴后勤 - 后勤科",
+          label: "吴后勤 - 后勤科 - 设备维修室",
           department_id: "9",
+          clinic_room_id: "R901",
           professional_title: "后勤主管",
         },
         {
           value: "L002",
-          label: "郑保洁 - 后勤科",
+          label: "郑保洁 - 后勤科 - 清洁用品库",
           department_id: "9",
+          clinic_room_id: "R902",
           professional_title: "保洁员",
         },
       ],
@@ -1209,17 +1564,24 @@ const loadStaffOptions = async (deptId = null) => {
 
     // 如果指定了科室，按科室过滤每种类型的人员（注意全部转换为字符串比较）
     if (deptId) {
+      console.log('按科室过滤人员，科室ID:', deptId);
       Object.keys(templateOptions).forEach((type) => {
+        const originalCount = templateOptions[type].length;
         templateOptions[type] = (templateOptions[type] || []).filter(
           (staff) => String(staff.department_id) === String(deptId)
         );
+        console.log(`${type}: ${originalCount} -> ${templateOptions[type].length}`);
       });
     }
 
     // 最终赋值并刷新筛选列表
     staffOptions.value = templateOptions;
+    console.log('最终人员选项:', staffOptions.value);
+    
     filterStaffOptions("");
     filterDialogStaffOptions("");
+    
+    console.log('=== 人员选项加载完成 ===');
   } catch (error) {
     console.error("加载人员列表失败:", error);
   }
@@ -1244,15 +1606,27 @@ const confirmBatchOperation = () => {
 };
 
 const loadFeeOptions = async () => {
-  // TODO: 调用后端接口获取费用项目列表（挂号费类型）
-  const response = await getFeeCateList();
-  if (response && response.code == 200) {
-    feeOptions.value = response.data.map((item) => ({
-      value: item.fee_id,
-      label: item.fee_name,
-      amount: item.amount,
-    }));
-    return;
+  try {
+    console.log('=== 开始加载费用项目列表 ===');
+    const response = await getFeeCateList();
+    console.log("费用项目API响应:", response);
+    
+    if (response && response.code === 200 && response.data) {
+      feeOptions.value = response.data.map((item) => ({
+        value: item.id || item.fee_id || item.categoryId,
+        label: item.name || item.fee_name || item.categoryName,
+        amount: item.amount || item.standardPrice || 0,
+      }));
+      console.log(`成功加载 ${feeOptions.value.length} 个费用项目:`, feeOptions.value);
+    } else {
+      console.error("费用项目API响应格式错误:", response);
+      feeOptions.value = [];
+      ElMessage.error("加载费用项目失败：响应格式错误");
+    }
+  } catch (error) {
+    console.error("加载费用项目失败:", error);
+    feeOptions.value = [];
+    ElMessage.error("加载费用项目失败，请检查网络连接");
   }
 };
 
@@ -1373,16 +1747,21 @@ const showAddScheduleDialog = () => {
   resetScheduleForm();
 };
 
-const editSchedule = (row) => {
+const editSchedule = async (row) => {
   scheduleDialog.is_edit = true;
   scheduleDialog.visible = true;
   Object.assign(scheduleForm, row);
   // 确保 department_id 存在
   scheduleForm.department_id =
     row.department_id || scheduleForm.department_id || "";
-  // 按科室加载人员选项，保证对话框人员列表正确
+  // 确保 clinic_room_id 存在
+  scheduleForm.clinic_room_id =
+    row.clinic_room_id || scheduleForm.clinic_room_id || "";
+  
+  // 按科室加载诊室和人员选项，保证对话框选项列表正确
   if (scheduleForm.department_id) {
-    loadStaffOptions(scheduleForm.department_id);
+    await load_clinic_rooms_by_department(scheduleForm.department_id);
+    loadStaffOptions(scheduleForm.department_id, scheduleForm.clinic_room_id);
     filterDialogStaffOptions("");
   }
 };
@@ -1415,22 +1794,49 @@ const deleteSchedule = async (row) => {
 const resetScheduleForm = () => {
   Object.keys(scheduleForm).forEach((key) => {
     if (key === "staff_type") {
-      scheduleForm[key] = "doctor";
+      // 使用动态加载的第一个人员类型作为默认值
+      scheduleForm[key] = staffTypeOptions.value.length > 0 ? staffTypeOptions.value[0].value : "";
+    } else if (key === "time_slot") {
+      // 使用动态加载的第一个班次时间作为默认值
+      scheduleForm[key] = TimeSlotOptions.value.length > 0 ? TimeSlotOptions.value[0].value : "";
     } else if (key === "is_active") {
       scheduleForm[key] = 1;
+    } else if (key === "schedule_type") {
+      scheduleForm[key] = "outpatient";
+    } else if (key === "max_patients") {
+      scheduleForm[key] = 30;
     } else if (Array.isArray(scheduleForm[key])) {
       scheduleForm[key] = [];
     } else {
       scheduleForm[key] = "";
     }
   });
-  scheduleForm.max_patients = 30;
-  scheduleForm.department_id = "";
+  
+  // 清空诊室选项
+  clinicRoomOptions.value = [];
 };
 
+// 表单弹窗人员类型变化处理（新函数）
+const handleDialogStaffTypeChange = (staffType) => {
+  console.log('=== 表单弹窗人员类型变化 ===');
+  console.log('选择的人员类型:', staffType);
+  
+  // 清空人员选择
+  scheduleForm.staff_id = "";
+  
+  // 重新过滤对话框人员选项
+  filterDialogStaffOptions("");
+  
+  console.log('当前对话框人员选项:', filteredDialogStaffOptions.value);
+};
+
+// 原有的handleStaffTypeChange函数保持不变（用于其他逻辑）
 const handleStaffTypeChange = (type) => {
   scheduleForm.staff_id = "";
   scheduleForm.department_id = "";
+  scheduleForm.clinic_room_id = "";
+  // 清空诊室选项
+  clinicRoomOptions.value = [];
   filterDialogStaffOptions("");
 };
 
@@ -1464,21 +1870,47 @@ const exportSchedule = () => {
 
 const refreshData = () => {
   loadSchedules();
-  ElMessage.success("数据已刷新");
+};
+
+// 设置表单默认值
+const setFormDefaults = () => {
+  // 设置默认人员类型（第一个选项）
+  if (staffTypeOptions.value && staffTypeOptions.value.length > 0) {
+    scheduleForm.staff_type = staffTypeOptions.value[0].value;
+  }
+  
+  // 设置默认班次时间（第一个选项）
+  if (TimeSlotOptions.value && TimeSlotOptions.value.length > 0) {
+    scheduleForm.time_slot = TimeSlotOptions.value[0].value;
+  }
 };
 
 // 初始化数据
 const initData = async () => {
   try {
-    await load_doctor_list();
+    console.log('=== 开始初始化数据 ===');
     await load_departments_list();
+    console.log('科室列表加载完成，departmentOptions:', departmentOptions.value);
+    console.log('filteredDepartmentOptions:', filteredDepartmentOptions.value);
+    
     await load_staff_types();
     await load_time_slots(); // 新增调用
-    filteredDepartmentOptions.value = allDepartmentOptions.value.slice(0, 10);
+    
+    // 确保筛选选项正确设置
+    if (allDepartmentOptions.value.length > 0) {
+      filteredDepartmentOptions.value = allDepartmentOptions.value; // 显示所有科室
+      console.log('重新设置filteredDepartmentOptions:', filteredDepartmentOptions.value);
+    }
 
-    await loadStaffOptions();
+    // 设置表单默认值
+    setFormDefaults();
+
+    await load_doctor_list();
+    await loadStaffOptions(null, null);
     await loadFeeOptions();
     await loadSchedules();
+    
+    console.log('=== 数据初始化完成 ===');
   } catch (error) {
     console.error("初始化数据失败:", error);
   }
